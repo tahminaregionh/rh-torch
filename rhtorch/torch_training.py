@@ -19,7 +19,7 @@ def main():
 
     parser = argparse.ArgumentParser(description='Runs training on dataset in the input directory and config.yaml')
     parser.add_argument("-i", "--input", 
-                        help="Directory containing data to train on. Parent folder contains 'config.yaml' file. Will use current working directory if nothing passed", 
+                        help="Project directory. Should contain data folder to train on + config file + data_generator. Will use current working directory if nothing passed", 
                         type=str, default=os.getcwd())
     parser.add_argument("-c", "--config", help="Config file else than {project_name}_config.yaml in input folder", type=str, default='')
     parser.add_argument("-k", "--kfold", help="K-value for selecting train/test split subset. Default k=0", type=int, default=0)
@@ -41,6 +41,7 @@ def main():
     configs['project_dir'] = str(project_dir)
     configs['model_name'] = model_outname
     configs['k_fold'] = args.kfold
+    configs['precision'] = args.precision
     configs['config_file'] = args.config
     
     # Set local data_generator
@@ -53,11 +54,11 @@ def main():
     augment = False if 'augment' not in configs else configs['augment']
     if augment:
         print("Augmenting data")
-    data_train = data_gen('train', conf=configs, augment=augment, test=is_test)
+    data_train = data_gen(project_dir, 'train', conf=configs, augment=augment, test=is_test)
     train_dataloader = DataLoader(data_train, shuffle=True, **loader_params)
     
     # validation data
-    data_valid = data_gen('valid', conf=configs, augment=False, test=is_test)
+    data_valid = data_gen(project_dir, 'valid', conf=configs, augment=False, test=is_test)
     valid_dataloader = DataLoader(data_valid, **loader_params)
     
     # define lightning module
@@ -79,12 +80,12 @@ def main():
     
     # CALLBACKS
     callbacks = []
-    if 'callback_image2image' in list(configs.keys()):
-        data_plot = data_gen('valid', conf=configs, augment=False, test=is_test)
+    if 'callback_image2image' in configs:
+        data_plot = data_gen(project_dir, 'valid', conf=configs, augment=False, test=is_test)
         plot_dataloader = DataLoader(data_plot, **loader_params)
         callback_image2image = getattr(plotting, configs['callback_image2image'])
         callbacks.append( callback_image2image(plot_dataloader) )
-        
+    
     # checkpointing
     model_path = project_dir.joinpath('trained_models').joinpath(model_outname)
     model_path.mkdir(parents=True, exist_ok=True)
@@ -112,7 +113,7 @@ def main():
                          accelerator='ddp',
                          resume_from_checkpoint=existing_checkpoint,
                          auto_select_gpus=True,
-                         precision=args.precision,
+                         precision=configs['precision'],
                          profiler="simple")
 
     # actual training
