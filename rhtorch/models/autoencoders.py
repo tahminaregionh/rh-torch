@@ -171,7 +171,8 @@ class UNet3DFullConv(nn.Module):
         x = self.up_conv4(torch.cat([x, x1], dim=1))
 
         return self.out(x)
-    
+
+
 class AEFlatpseudo2D(nn.Module):
     
     def __init__(self, in_channels=1):
@@ -217,7 +218,8 @@ class AEFlatpseudo2D(nn.Module):
         x10 = self.last(x9)
         
         return self.ReLU(x10+image)
-    
+
+
 class ResidualConv(nn.Module):
     def __init__(self, input_dim, output_dim, stride, padding):
         super(ResidualConv, self).__init__()
@@ -252,6 +254,7 @@ class Upsample(nn.Module):
 
     def forward(self, x):
         return self.upsample(x)
+
 
 class Res3DUnet(nn.Module):
     def __init__(self, channel, filters=[64, 128, 256, 512], do_sigmoid=False):
@@ -317,4 +320,3 @@ class Res3DUnet(nn.Module):
         output = self.output_layer(x10)
 
         return output
-    
