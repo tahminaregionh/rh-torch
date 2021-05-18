@@ -5,12 +5,14 @@ import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
 from torch.utils.data import DataLoader
-import os, sys
+import os
+import sys
 from pathlib import Path
 # library package imports
 from rhtorch.models import modules
 from rhtorch.callbacks import plotting
 from rhtorch.config_utils import load_model_config, copy_model_config
+
 
 def main():
     import argparse
@@ -25,17 +27,16 @@ def main():
     parser.add_argument("--precision", help="Torch precision. Default 32", type=int, default=32)
     args = parser.parse_args()
 
-    if args.test:
-        os.environ['WANDB_MODE'] = 'dryrun'
-        
     project_dir = Path(args.input)
     is_test = args.test
-    
+
     # load configs and create additional entries for saving later
     configs, model_outname = load_model_config(project_dir, Path(args.config))
     if is_test:
         print('This is a test run on 10/2 train/test patients and 5 epochs.')
         configs['epoch'] = 5
+        os.environ['WANDB_MODE'] = 'dryrun'
+
     model_outname += f"_k{args.kfold}_e{configs['epoch']}"
     configs['project_dir'] = str(project_dir)
     configs['model_name'] = model_outname
@@ -49,7 +50,7 @@ def main():
     data_gen = getattr(data_generator, configs['data_generator'])
     
     # training data
-    augment = False if not 'augment' in configs.keys() else configs['augment']
+    augment = False if 'augment' not in configs else configs['augment']
     if augment:
         print("Augmenting data")
     data_train = data_gen('train', conf=configs, augment=augment, test=is_test)
@@ -71,10 +72,10 @@ def main():
         
     # wandb dashboard setup
     wandb_logger = WandbLogger(name=configs['version_name'],
-                                project=configs['project_name'], 
-                                log_model=False,
-                                save_dir=project_dir,
-                                config=configs)
+                               project=configs['project_name'],
+                               log_model=False,
+                               save_dir=project_dir,
+                               config=configs)
     
     # CALLBACKS
     callbacks = []
@@ -110,21 +111,22 @@ def main():
                          gpus=-1, 
                          accelerator='ddp',
                          resume_from_checkpoint=existing_checkpoint,
-                         # stochastic_weight_avg=True,    # smooth the loss landscape to avoid local minimum
-                         auto_select_gpus=True,    #)
-                         auto_scale_batch_size='binsearch',
+                         auto_select_gpus=True,
                          precision=args.precision,
                          profiler="simple")
-    
-    
+
     # actual training
     trainer.fit(model, train_dataloader, valid_dataloader)
-    
+
+    # add useful info to saved configs
+    configs['best_model'] = checkpoint_callback.best_model_path
+
     # save the model
     output_file = model_path.joinpath(f"{model_outname}.pt")
     torch.save(model.state_dict(), output_file)
     copy_model_config(model_path, configs)
     print("Saved model and config file to disk")
-    
+
+
 if __name__ == "__main__":
     main()
