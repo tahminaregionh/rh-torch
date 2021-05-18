@@ -1,0 +1,37 @@
+# main config to train models
+project_name: 'YOUR_PROJECT_NAME' # Used for WANDB
+version_name: 'RESUNETv1' # Make run run unique by changing this counter
+
+# main model:
+epoch: 100
+module: 'LightningAE'
+
+# generator
+generator: 'Res3DUnet'
+g_optimizer: 'Adam'
+g_lr: 1e-4
+#lr_scheduler: 'exponential_decay_0.01'
+g_loss: 'MeanAbsoluteError'
+# pretrained_generator: 'LightningAE_PETCTtoPET_UNet3DFullConv_lr1e-04_mae_bz2_transverse16_k0_e200'
+
+# discriminator - will be used if model is GAN
+# discriminator: 'ConvNetDiscriminator'
+# d_optimizer: 'Adam'
+# d_lr: 2e-4
+# d_loss: 'BCEWithLogitsLoss'
+
+# data:
+data_split_pkl: 'Data/data_5fold.pickle'
+data_generator: 'DatasetPreprocessedPatches'
+batch_size: 8
+data_folder: 'Data/data_noblur_25_64x64x64'
+pet_normalization_constant: 32676
+augment: True
+data_shape: [64,64,64]
+color_channels_in: 1
+repeat_patient_list: 500
+# for plotting during training
+callback_image2image: 'ImagePredictionLogger'
+
+# model-specific info (self-generated)
+# do not write anything beyond here
