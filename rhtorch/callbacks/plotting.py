@@ -29,7 +29,10 @@ def plot_inline(d1, d2, d3, color_channel_axis=0):
     orient = 0
     text_pos = d1.size(2) * 0.98
     
-    titles = ['Input', 'Target', 'Prediction']
+    # make a list of subplot titles - may need several input subtitles
+    titles = [f"Input{i+1}" for i in range(d1.size(color_channel_axis))]
+    titles.extend(['Target', 'Prediction'])
+    
     for idx in range(num_dat):
         single_data = d_arr.take(indices=idx, axis=color_channel_axis) 
         ax[idx].imshow(single_data.take(indices=slice_i, axis=orient), 
