@@ -2,41 +2,41 @@
 import torch
 import torch.nn as nn
 import pytorch_lightning as pl
-from caai.pytorchlightning.models import discriminators, autoencoders
+from rhtorch.models import discriminators, autoencoders
+import torchmetrics as tm
 import math
+
 
 class LightningAE(pl.LightningModule):
     def __init__(self, hparams, in_shape=(2, 128, 128, 128)):
         super().__init__()
         self.hparams = hparams
-        self.in_shape = in_shape    #(self.img_rows, self.img_cols, self.channels_input)
+        self.in_shape = in_shape    # (self.img_rows, self.img_cols, self.channels_input)
         self.in_channels, self.dimx, self.dimy, self.dimz = self.in_shape
         
         # generator
         self.generator = getattr(autoencoders, hparams['generator'])(self.in_channels)
         self.g_optimizer = getattr(torch.optim, hparams['g_optimizer'])
         self.lr = hparams['g_lr']
-        self.g_loss = getattr(pl.metrics, hparams['g_loss'])()     # MAE
+        self.g_loss_train = getattr(tm, hparams['g_loss'])()  # MAE
+        self.g_loss_val = getattr(tm, hparams['g_loss'])()  # MAE
         self.g_params = self.generator.parameters()
         
         # additional losses
-        self.mse_loss = pl.metrics.MeanSquaredError()
-        self.accuracy = pl.metrics.Accuracy()
-
+        self.mse_loss = tm.MeanSquaredError()
 
     def forward(self, image):
         """ image.size: (Batch size, Color channels, Depth, Height, Width) """
         return self.generator(image)
     
-    def training_step(self, batch, batch_idx):
+    def training_step(self, batch, batch_idx, optimizer_idx):
         # training_step defined the train loop. It is independent of forward
         x, y = batch
         y_hat = self.forward(x)
         # main loss used for optimization
-        loss = self.g_loss(y_hat, y)
+        loss = self.g_loss_train(y_hat, y)
         self.log('train_loss', loss, sync_dist=True)
         # other losses to log only
-        # self.log('train_accuracy', self.accuracy(y_hat, y))
         self.log('train_mse', self.mse_loss(y_hat, y), sync_dist=True)
         
         return loss
@@ -44,20 +44,19 @@ class LightningAE(pl.LightningModule):
     def validation_step(self, val_batch, batch_idx):
         x, y = val_batch
         y_hat = self.forward(x)
-        loss = self.g_loss(y_hat, y)
+        loss = self.g_loss_val(y_hat, y)
         self.log('val_loss', loss, sync_dist=True)
         self.log('val_mse', self.mse_loss(y_hat, y), sync_dist=True)
-        # self.log('val_accuracy', self.accuracy(y_hat, y))
 
         return loss
         
     def configure_optimizers(self):
         g_optimizer = self.g_optimizer(self.g_params, lr=self.lr)
         
-        if not 'lr_scheduler' in self.hparams.keys():
+        if 'lr_scheduler' not in self.hparams:
             return g_optimizer
         else:
-            print("LR_SCHEDULER:",self.hparams['lr_scheduler'])
+            print("LR_SCHEDULER:", self.hparams['lr_scheduler'])
             if self.hparams['lr_scheduler'] == 'polynomial_0.995':
                 lambda1 = lambda epoch: 0.995 ** epoch
                 scheduler = torch.optim.lr_scheduler.LambdaLR(g_optimizer, lr_lambda=lambda1)
@@ -98,7 +97,6 @@ class LightningPix2Pix(LightningAE):
         self.d_params = self.discriminator.parameters()
         self.LAMBDA = 100
 
-        
     def training_step(self, batch, batch_idx, optimizer_idx):
         # training_step defines the train loop. It is independent of forward
         inp, tar = batch
@@ -118,11 +116,12 @@ class LightningPix2Pix(LightningAE):
             # No need to calculate the gradients for Discriminators' parameters when training the generator
             for param in self.discriminator.parameters():
                 param.requires_grad = False
+
             patches_out = self.discriminator(inp, fake_imgs)
             # telling the discriminator that generated images are real
             d_loss = self.d_loss(patches_out, valid)
             # mean absolute error
-            g_loss = self.g_loss(fake_imgs, tar)
+            g_loss = self.g_loss_train(fake_imgs, tar)
             gan_loss = d_loss + (self.LAMBDA * g_loss)
             self.log('train_loss', g_loss, sync_dist=True)        # implied for generator
             self.log('train_gan_loss', gan_loss, sync_dist=True)
@@ -147,7 +146,6 @@ class LightningPix2Pix(LightningAE):
             
             return d_loss
 
-        
     def configure_optimizers(self):
         # can return multiple optimizers in a tuple, for GANs for instance
         d_optimizer = self.d_optimizer(self.d_params, lr=self.d_lr)
