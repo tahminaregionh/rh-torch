@@ -29,7 +29,7 @@ class LightningAE(pl.LightningModule):
         """ image.size: (Batch size, Color channels, Depth, Height, Width) """
         return self.generator(image)
     
-    def training_step(self, batch, batch_idx, optimizer_idx):
+    def training_step(self, batch, batch_idx):
         # training_step defined the train loop. It is independent of forward
         x, y = batch
         y_hat = self.forward(x)
