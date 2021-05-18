@@ -3,6 +3,7 @@ import wandb
 import matplotlib.pyplot as plt
 import numpy as np
 
+
 def plot_inline(d1, d2, d3, color_channel_axis=0):
     """
     Parameters
@@ -23,8 +24,8 @@ def plot_inline(d1, d2, d3, color_channel_axis=0):
     # d_arr = torch.cat((d1, d2, d3), dim=color_channel_axis).detach()
     num_dat = d_arr.shape[color_channel_axis]
     
-    fig, ax = plt.subplots(1, num_dat, gridspec_kw={'wspace':0, 'hspace':0})
-    slice_i = int(d1.shape[1] / 2)
+    fig, ax = plt.subplots(1, num_dat, gridspec_kw={'wspace': 0, 'hspace': 0})
+    slice_i = int(d1.size(1) / 2)
     orient = 0
     text_pos = d1.size(2) * 0.98
     
@@ -41,22 +42,20 @@ def plot_inline(d1, d2, d3, color_channel_axis=0):
     plt.close()
     return wandb_im
 
+
 # CT ca. -200 to 300 HU. => 0.4-0.7 when usual CTnorm is used.
 class ImagePredictionLogger(Callback):
-    def __init__(self, val_dataloader, deterministic=True, num_samples=2):
+    def __init__(self, val_dataloader):
         super().__init__()
-        if deterministic:
-            self.X, self.y = next(iter(val_dataloader))
+        self.X, self.y = next(iter(val_dataloader))
         
     def on_validation_epoch_end(self, trainer, pl_module):
         # Dataloader loads on CPU --> pass to GPU
         X = self.X.to(device=pl_module.device)
-        # y = self.y.to(device=pl_module.device)
         y_hat = pl_module(X)
         
         # move arrays back to the CPU for plotting
         X = X.cpu()
-        # y = y.cpu()
         y = self.y
         y_hat = y_hat.cpu()
         
@@ -65,4 +64,4 @@ class ImagePredictionLogger(Callback):
         
         # add to logger like so
         trainer.logger.experiment.log({"Sample images": figs})
-        
+
