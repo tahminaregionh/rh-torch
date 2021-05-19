@@ -62,6 +62,16 @@ class DatasetPreprocessedRandomPatches(Dataset):
             train,valid = train_test_split(split_data_info[f"train_{self.config['k_fold']}"],test_size=.2,random_state=42)
             self.patients = train if self.data_type == 'train' else valid
             
+            # Load list of patches
+            for file in os.listdir(self.rootdir+'/gt'):
+                ID = '_'.join(file.split('_')[:2])
+                if ID in self.patients:
+                    if not ID in self.patches:
+                        self.patches[ID] = []
+                    self.patches[ID].append( file )
+            # Remove patients without any patches
+            self.patients = [ p for p in self.patients if p in self.patches ]
+            
             # REPEAT
             self.patients = np.repeat(self.patients,self.repeat_list)
             
@@ -74,11 +84,6 @@ class DatasetPreprocessedRandomPatches(Dataset):
             if self.data_type == 'valid':
                 keep = 2
             self.patients = self.patients[:keep]
-            
-        # Load list of patches when training
-        if not self.data_type == 'test':
-            for PID in self.patients:
-                self.patches[PID]=[p.name for p in Path(self.rootdir+'/gt').glob(f'{PID}_*.npy')]
 
     def __len__(self):
         'Denotes the total number of samples in the dataset'
