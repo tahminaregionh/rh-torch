@@ -14,7 +14,7 @@ class ConvNetDiscriminator(nn.Module):
         ----------
         in_channels : int, optional
             input_data should contain 2 channels from concatenating 
-            the source + target image. Default is 2.
+            the real + fake image. Default is 2.
         dis_f : int, optional
             Number of filters in the first conv layer. Default is 64.
 
