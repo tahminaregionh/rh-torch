@@ -22,7 +22,7 @@ g_loss: 'MeanAbsoluteError'
 
 # data:
 data_split_pkl: 'Data/data_5fold.pickle'
-data_generator: 'DatasetPreprocessedPatches'
+data_generator: 'CustomDataLoader'
 batch_size: 8
 data_folder: 'Data/data_noblur_25_64x64x64'
 pet_normalization_constant: 32676

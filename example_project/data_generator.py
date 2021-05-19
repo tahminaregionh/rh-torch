@@ -16,12 +16,12 @@ from rhtorch.data.data_generator import DatasetPreprocessedRandomPatches
 class CustomDataLoader(DatasetPreprocessedRandomPatches):
     def __init__(self, data_type='train', conf=None, augment=False, test=False):
         super().__init__(data_type,conf,augment,test)
-        self.pet_normalization = conf['pet_normalization']
+        self.pet_normalization_constant = conf['pet_normalization_constant']
    
     def normalize( self, in_img, out_img ):  
-        out_img = out_img / self.pet_normalization
+        out_img = out_img / self.pet_normalization_constant
         return in_img, out_img
     
     def de_normalize( self, image ):  
-        image = image * self.pet_normalization
+        image = image * self.pet_normalization_constant
         return image
