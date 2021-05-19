@@ -2,6 +2,7 @@ from pytorch_lightning.callbacks import Callback
 import wandb
 import matplotlib.pyplot as plt
 import numpy as np
+import torch
 
 
 def plot_inline(d1, d2, d3, color_channel_axis=0):
@@ -20,8 +21,11 @@ def plot_inline(d1, d2, d3, color_channel_axis=0):
         Use 3 for TF models (dimx, dimy, dimz, cc)
 
     """
-    d_arr = np.concatenate((d1, d2, d3), color_channel_axis)
-    # d_arr = torch.cat((d1, d2, d3), dim=color_channel_axis).detach()
+    # If input has more than 1 color channel, use only the first
+    if d1.shape[color_channel_axis] > 1:
+        d1 = d1[0,...] if color_channel_axis == 0 else d1[...,0]
+        d1 = torch.unsqueeze(d1,color_channel_axis)
+    d_arr = d_arr = np.concatenate((d1, d2, d3), color_channel_axis)
     num_dat = d_arr.shape[color_channel_axis]
     
     fig, ax = plt.subplots(1, num_dat, gridspec_kw={'wspace': 0, 'hspace': 0})
@@ -45,8 +49,6 @@ def plot_inline(d1, d2, d3, color_channel_axis=0):
     plt.close()
     return wandb_im
 
-
-# CT ca. -200 to 300 HU. => 0.4-0.7 when usual CTnorm is used.
 class ImagePredictionLogger(Callback):
     def __init__(self, val_dataloader):
         super().__init__()
