@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 import ruamel.yaml as yaml
 from datetime import datetime
+from pathlib import Path
 import torch
 
 loss_map = {'MeanAbsoluteError': 'mae',
@@ -10,18 +11,45 @@ loss_map = {'MeanAbsoluteError': 'mae',
             'BCEWithLogitsLoss': 'BCE'}
 
 
-def load_model_config(path, cfg_file='config.yaml'):
-    config_file = path.joinpath(cfg_file)
+def load_model_config(rootdir, arguments):
+    
+    # check for config_file
+    config_file = Path(arguments.config)
+    if not config_file.exists():
+        config_file = rootdir.joinpath(config_file)
+    if not config_file.exists():
+        raise FileNotFoundError("Config file not found. Define relative to project directory or as absolute path in config file")
+    
+    # read the config file
     with open(config_file) as file:
-        cfg = yaml.load(file, Loader=yaml.RoundTripLoader)
+        config = yaml.load(file, Loader=yaml.RoundTripLoader)
         
-    batch_size = cfg['batch_size'] * torch.cuda.device_count()
+    batch_size = config['batch_size'] * torch.cuda.device_count()
+    data_shape = 'x'.join(map(str, config['data_shape']))
+    base_name = f"{config['module']}_{config['version_name']}_{config['data_generator']}"
+    dat_name = f"bz{batch_size}_{data_shape}"
+    full_name = f"{base_name}_{dat_name}_k{arguments.kfold}_e{config['epoch']}"
+    
+    # check for data folder
+    data_folder = Path(config['data_folder'])
+    if not data_folder.exists():
+        # try relative to project dir - in this case overwrite config
+        data_folder = rootdir.joinpath(config['data_folder'])
+    if not data_folder.exists():
+        raise FileNotFoundError("Data path not found. Define relative to the project directory or as absolute path in config file")
+    
+    # additional info from args and miscellaneous to save in config
+    config['build date'] = datetime.now().strftime("%Y-%m-%d %H.%M.%S")
+    config['model_name'] = full_name
+    config['project_dir'] = str(rootdir)
+    config['data_folder'] = str(data_folder)
+    config['config_file'] = str(config_file)
+    config['k_fold'] = arguments.kfold
+    config['precision'] = arguments.precision
+    if 'acc_grad_batches' not in config:
+        config['acc_grad_batches'] = 1
 
-    base_name = f"{cfg['module']}_{cfg['version_name']}_{cfg['data_generator']}"
-    dat_name = "_bz{}_{}".format(batch_size, 'x'.join(map(str, cfg['data_shape'])))
-    name = base_name + dat_name
-    cfg['build date'] = datetime.now().strftime("%Y-%m-%d %H.%M.%S")
-    return cfg, name
+    return config
 
 
 def copy_model_config(path, config):
