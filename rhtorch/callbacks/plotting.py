@@ -24,8 +24,8 @@ def plot_inline(d1, d2, d3, color_channel_axis=0):
     # If input has more than 1 color channel, use only the first
     if d1.shape[color_channel_axis] > 1:
         d1 = d1[0,...] if color_channel_axis == 0 else d1[...,0]
-        d1 = torch.unsqueeze(d1,color_channel_axis)
-    d_arr = d_arr = np.concatenate((d1, d2, d3), color_channel_axis)
+        d1 = torch.unsqueeze(d1, color_channel_axis)
+    d_arr = np.concatenate((d1, d2, d3), color_channel_axis)
     num_dat = d_arr.shape[color_channel_axis]
     
     fig, ax = plt.subplots(1, num_dat, gridspec_kw={'wspace': 0, 'hspace': 0})
@@ -33,14 +33,15 @@ def plot_inline(d1, d2, d3, color_channel_axis=0):
     orient = 0
     text_pos = d1.size(2) * 0.98
     
-    # make a list of subplot titles - may need several input subtitles
-    titles = [f"Input{i+1}" for i in range(d1.size(color_channel_axis))]
-    titles.extend(['Target', 'Prediction'])
+    # make a list of subplot titles - may need several input subtitles - this is unnecessary if only plotting 1 input
+    # titles = [f"Input{i+1}" for i in range(d1.size(color_channel_axis))]
+    # titles.extend(['Target', 'Prediction'])
+    titles = ['Input', 'Target', 'Prediction']
     
     for idx in range(num_dat):
         single_data = d_arr.take(indices=idx, axis=color_channel_axis) 
         ax[idx].imshow(single_data.take(indices=slice_i, axis=orient), 
-                       cmap='gray', vmin=0, vmax=1)
+                       cmap='gray') #, vmin=0, vmax=1)
         ax[idx].axis('off')
         ax[idx].text(3, text_pos, titles[idx], color='white', fontsize=12)
         
