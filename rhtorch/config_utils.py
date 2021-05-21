@@ -10,10 +10,9 @@ class UserConfig:
         self.args = arguments
         
         # load default configs
-        # default_config_file = Path(__file__).parent.absolute().joinpath('default_config.yaml')
         default_config_file = Path(__file__).parent.joinpath('default_config.yaml')
         with open(default_config_file) as dcf:
-            self.default_params = yaml.load(dcf)
+            self.default_params = yaml.load(dcf, Loader=yaml.Loader)
             
         # load user config file
         with open(self.config_file) as cf:
@@ -32,6 +31,7 @@ class UserConfig:
         
         # make model name
         self.create_model_name()
+        self.fill_additional_info()
             
     def is_path(self, path):
         # check for path - assuming absolute path was given
@@ -50,7 +50,7 @@ class UserConfig:
         for k, v in self.default_params.items():
             if k not in self.hparams:
                 self.hparams[k] = v
-            # TO DO - ENSURE NOT COPYING IRRELEVANT DATA e.g. GAN parameters if model is AE
+            ### TO DO - ENSURE NOT COPYING IRRELEVANT DATA e.g. GAN parameters if model is AE
     
     def create_model_name(self):
         
