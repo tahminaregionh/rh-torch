@@ -12,7 +12,7 @@ from pathlib import Path
 # library package imports
 from rhtorch.models import modules
 from rhtorch.callbacks import plotting
-from rhtorch.config_utils import load_model_config, copy_model_config
+from rhtorch.config_utils import UserConfig
 
 
 def main():
@@ -32,7 +32,8 @@ def main():
     is_test = args.test
 
     # load configs from file + additional info from args
-    configs = load_model_config(project_dir, args)
+    user_configs = UserConfig(project_dir, args)
+    configs = user_configs.hparams   ### WARNING TO CHECK IF THIS is 2 names for the same memory address or 2 distinct memory addresses (matters when saving copy in the end)
 
     # Set local data_generator
     sys.path.insert(1, args.input)
@@ -138,7 +139,7 @@ def main():
     # save the model
     output_file = model_path.joinpath(f"{configs['model_name']}.pt")
     torch.save(model.state_dict(), output_file)
-    copy_model_config(model_path, configs)
+    user_configs.save_copy(model_path)
     print("Saved model and config file to disk")
 
 
