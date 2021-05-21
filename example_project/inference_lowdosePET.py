@@ -100,7 +100,7 @@ def save_mnc( patient, img ):
     p.mkdir(parents=True,exist_ok=True)
     
     # Denormalize
-    denormalized_img = valid_test_gen.de_normalize( y_pred ) 
+    denormalized_img = valid_test_gen.de_normalize( img ) 
     
     out = pyminc.volumeLikeFile(str(p.parent.joinpath('PET_100.mnc')),str(p.joinpath(f'{model_outname}.mnc')))
     out.data = denormalized_img
