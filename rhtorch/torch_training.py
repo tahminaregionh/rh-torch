@@ -34,7 +34,7 @@ def main():
     # load configs from file + additional info from args
     user_configs = UserConfig(project_dir, args)
     configs = user_configs.hparams   ### WARNING TO CHECK IF THIS is 2 names for the same memory address or 2 distinct memory addresses (matters when saving copy in the end)
-
+    
     # Set local data_generator
     sys.path.insert(1, args.input)
     import data_generator
@@ -64,7 +64,7 @@ def main():
     model = module(configs, shape_in)
     
     # transfer learning setup
-    if 'pretrained_generator' in configs:
+    if configs['pretrained_generator']:
         print("Setting up transfer learning")
         pretrained_model_path = Path(configs['pretrained_generator'])
         if pretrained_model_path.exists():
@@ -119,11 +119,12 @@ def main():
     callbacks.append(checkpoint_callback)
     
     # set the trainer and fit
+    accelerator = 'ddp' if configs['gpu_count'] > 1 else None
     trainer = pl.Trainer(max_epochs=configs['epoch'], 
                          logger=wandb_logger, 
                          callbacks=callbacks, 
                          gpus=-1, 
-                         accelerator='ddp',
+                         accelerator=accelerator,
                          resume_from_checkpoint=existing_checkpoint,
                          auto_select_gpus=True,
                          accumulate_grad_batches=configs['acc_grad_batches'],
