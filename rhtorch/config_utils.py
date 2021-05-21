@@ -26,14 +26,9 @@ class UserConfig:
         # sanity check on data_folder provided by user
         self.data_path = self.is_path(self.hparams['data_folder'])
         
-        # check whether distributed learning
-        gpu_count = torch.cuda.device_count()
-        self.hparams['gpu_count'] = gpu_count
-        self.hparams['effective_batch_size'] = self.hparams['batch_size'] * gpu_count
-        
         # make model name
-        self.create_model_name()
         self.fill_additional_info()
+        self.create_model_name()
             
     def is_path(self, path):
         # check for path - assuming absolute path was given
@@ -53,18 +48,10 @@ class UserConfig:
             if k not in self.hparams:
                 self.hparams[k] = v
             ### TO DO - ENSURE NOT COPYING IRRELEVANT DATA e.g. GAN parameters if model is AE
-    
-    def create_model_name(self):
-        
-        data_shape = 'x'.join(map(str, self.hparams['data_shape']))
-        base_name = f"{self.hparams['module']}_{self.hparams['version_name']}_{self.hparams['data_generator']}"
-        dat_name = f"bz{self.hparams['effective_batch_size']}_{data_shape}"
-        self.hparams['model_name'] = f"{base_name}_{dat_name}_k{self.args.kfold}_e{self.hparams['epoch']}"
 
     def fill_additional_info(self):
         # additional info from args and miscellaneous to save in config
         self.hparams['build date'] = datetime.now().strftime("%Y%m%d-%H%M%S")
-        self.hparams['model_name'] = self.hparams['model_name']
         self.hparams['project_dir'] = str(self.rootdir)
         self.hparams['data_folder'] = str(self.data_path)
         self.hparams['config_file'] = str(self.config_file)
@@ -73,6 +60,13 @@ class UserConfig:
         self.hparams['global_batch_size'] = self.hparams['batch_size'] * self.hparams['GPUs']
         self.hparams['rhtorch_version'] = __version__
         self.hparams['hostname'] = socket.gethostname()
+    
+    def create_model_name(self):
+        
+        data_shape = 'x'.join(map(str, self.hparams['data_shape']))
+        base_name = f"{self.hparams['module']}_{self.hparams['version_name']}_{self.hparams['data_generator']}"
+        dat_name = f"bz{self.hparams['global_batch_size']}_{data_shape}"
+        self.hparams['model_name'] = f"{base_name}_{dat_name}_k{self.args.kfold}_e{self.hparams['epoch']}"
     
     def save_copy(self, output_dir, append_timestamp=False):
         model_name = self.hparams['model_name']
