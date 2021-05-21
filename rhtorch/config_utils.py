@@ -5,6 +5,7 @@ from datetime import datetime
 from pathlib import Path
 import torch
 from rhtorch.version import __version__
+import socket
 
 loss_map = {'MeanAbsoluteError': 'mae',
             'MeanSquaredError': 'mse',
@@ -45,10 +46,12 @@ def load_model_config(rootdir, arguments):
     config['data_folder'] = str(data_folder)
     config['config_file'] = str(config_file)
     config['k_fold'] = arguments.kfold
-    config['precision'] = arguments.precision
+    if 'precision' not in config:
+        config['precision'] = 32
     config['GPUs'] = torch.cuda.device_count()
     config['global_batch_size'] = config['batch_size'] * config['GPUs']
     config['rhtorch_version'] = __version__
+    config['hostname'] = socket.gethostname()
     if 'acc_grad_batches' not in config:
         config['acc_grad_batches'] = 1
 
