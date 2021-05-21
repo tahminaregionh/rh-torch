@@ -14,7 +14,6 @@ from rhtorch.models import modules
 from rhtorch.callbacks import plotting
 from rhtorch.config_utils import load_model_config, copy_model_config
 
-
 def main():
     import argparse
 
@@ -45,6 +44,10 @@ def main():
         print('This is a test run on 10/2 train/test patients and 5 epochs.')
         configs['epoch'] = 5
         os.environ['WANDB_MODE'] = 'dryrun'
+    else:
+        # Save the config prior to training the model - one for each time the script is started
+        copy_model_config(model_path, configs, append_timestamp=True)
+        print("Saved config prior to model training")
         
     # training data
     augment = False if 'augment' not in configs else configs['augment']
@@ -140,7 +143,7 @@ def main():
     torch.save(model.state_dict(), output_file)
     copy_model_config(model_path, configs)
     print("Saved model and config file to disk")
-
+    
 
 if __name__ == "__main__":
     main()
