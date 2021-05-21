@@ -57,8 +57,11 @@ def load_model_config(rootdir, arguments):
 
 def copy_model_config(path, config, append_timestamp=False):
     model_name = config['model_name']
-    timestamp = config['build_date'].replace(' ','_')
-    config_file = path.joinpath(f"config_{model_name}.yaml") if not append_timestamp else path.joinpath(f"config_{model_name}_{timestamp}.yaml")
+    if append_timestamp:
+        timestamp = config['build_date'].replace(' ','_')
+        config_file = path.joinpath(f"config_{model_name}_{timestamp}.yaml")
+    else:
+        config_file = path.joinpath(f"config_{model_name}.yaml") 
     config.yaml_set_start_comment(f'Config file for {model_name}')
     with open(config_file, 'w') as file:
         yaml.dump(config, file, Dumper=yaml.RoundTripDumper)
