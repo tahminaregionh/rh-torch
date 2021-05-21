@@ -51,7 +51,7 @@ class UserConfig:
 
     def fill_additional_info(self):
         # additional info from args and miscellaneous to save in config
-        self.hparams['build date'] = datetime.now().strftime("%Y%m%d-%H%M%S")
+        self.hparams['build_date'] = datetime.now().strftime("%Y%m%d-%H%M%S")
         self.hparams['project_dir'] = str(self.rootdir)
         self.hparams['data_folder'] = str(self.data_path)
         self.hparams['config_file'] = str(self.config_file)
