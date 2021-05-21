@@ -2,6 +2,8 @@ import ruamel.yaml as yaml
 from datetime import datetime
 from pathlib import Path
 import torch
+from rhtorch.version import __version__
+import socket
 
 class UserConfig:
     def __init__(self, rootdir, arguments=None):
@@ -43,7 +45,7 @@ class UserConfig:
             raise FileNotFoundError(f"{path} not found. Define relative to project directory or as absolute path in config file/argument passing.")
         
         return filepath
-    
+
     def merge_dicts(self):
         """ adds to the user_params dictionnary any missing key from the default params """
         
@@ -61,16 +63,22 @@ class UserConfig:
 
     def fill_additional_info(self):
         # additional info from args and miscellaneous to save in config
-        self.hparams['build date'] = datetime.now().strftime("%Y-%m-%d %H.%M.%S")
+        self.hparams['build date'] = datetime.now().strftime("%Y%m%d-%H%M%S")
         self.hparams['model_name'] = self.hparams['model_name']
         self.hparams['project_dir'] = str(self.rootdir)
         self.hparams['data_folder'] = str(self.data_path)
         self.hparams['config_file'] = str(self.config_file)
         self.hparams['k_fold'] = self.args.kfold
+        self.hparams['GPUs'] = torch.cuda.device_count()
+        self.hparams['global_batch_size'] = self.hparams['batch_size'] * self.hparams['GPUs']
+        self.hparams['rhtorch_version'] = __version__
+        self.hparams['hostname'] = socket.gethostname()
     
-    def save_copy(self, output_dir):
+    def save_copy(self, output_dir, append_timestamp=False):
         model_name = self.hparams['model_name']
-        config_file = output_dir.joinpath(f"config_{model_name}.yaml")
+        timestamp = f"_{self.hparams['build_date']}" if append_timestamp else ""
+        save_config_file_name = f"config_{model_name}{timestamp}"        
+        config_file = output_dir.joinpath(save_config_file_name + ".yaml")
         self.hparams.yaml_set_start_comment(f'Config file for {model_name}')
         with open(config_file, 'w') as file:
             yaml.dump(self.hparams, file, Dumper=yaml.RoundTripDumper)

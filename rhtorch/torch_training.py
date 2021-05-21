@@ -14,7 +14,6 @@ from rhtorch.models import modules
 from rhtorch.callbacks import plotting
 from rhtorch.config_utils import UserConfig
 
-
 def main():
     import argparse
 
@@ -25,7 +24,6 @@ def main():
     parser.add_argument("-c", "--config", help="Config file else than 'config.yaml' in project directory (input dir)", type=str, default='config.yaml')
     parser.add_argument("-k", "--kfold", help="K-value for selecting train/test split subset. Default k=0", type=int, default=0)
     parser.add_argument("-t", "--test", help="Test run for 1 patient", action="store_true", default=False)
-    # parser.add_argument("-p", "--precision", help="Torch precision. Default 32", type=int, default=32)
     
     args = parser.parse_args()
     project_dir = Path(args.input)
@@ -118,6 +116,11 @@ def main():
     )
     callbacks.append(checkpoint_callback)
     
+    # Save the config prior to training the model - one for each time the script is started
+    if not is_test:        
+        user_configs.save_copy(model_path, append_timestamp=True)
+        print("Saved config prior to model training")
+    
     # set the trainer and fit
     accelerator = 'ddp' if configs['gpu_count'] > 1 else None
     trainer = pl.Trainer(max_epochs=configs['epoch'], 
@@ -142,7 +145,7 @@ def main():
     torch.save(model.state_dict(), output_file)
     user_configs.save_copy(model_path)
     print("Saved model and config file to disk")
-
+    
 
 if __name__ == "__main__":
     main()
