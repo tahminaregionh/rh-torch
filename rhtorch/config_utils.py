@@ -1,60 +1,76 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 import ruamel.yaml as yaml
 from datetime import datetime
 from pathlib import Path
 import torch
 
-loss_map = {'MeanAbsoluteError': 'mae',
-            'MeanSquaredError': 'mse',
-            'huber_loss': 'huber',
-            'BCEWithLogitsLoss': 'BCE'}
-
-
-def load_model_config(rootdir, arguments):
-    
-    # check for config_file
-    config_file = Path(arguments.config)
-    if not config_file.exists():
-        config_file = rootdir.joinpath(config_file)
-    if not config_file.exists():
-        raise FileNotFoundError("Config file not found. Define relative to project directory or as absolute path in config file")
-    
-    # read the config file
-    with open(config_file) as file:
-        config = yaml.load(file, Loader=yaml.RoundTripLoader)
+class UserConfig:
+    def __init__(self, rootdir, arguments=None):
+        self.rootdir = rootdir
+        self.config_file = self.is_path(arguments.config)
+        self.args = arguments
         
-    batch_size = config['batch_size'] * torch.cuda.device_count()
-    data_shape = 'x'.join(map(str, config['data_shape']))
-    base_name = f"{config['module']}_{config['version_name']}_{config['data_generator']}"
-    dat_name = f"bz{batch_size}_{data_shape}"
-    full_name = f"{base_name}_{dat_name}_k{arguments.kfold}_e{config['epoch']}"
+        # load default configs
+        # default_config_file = Path(__file__).parent.absolute().joinpath('default_config.yaml')
+        default_config_file = Path(__file__).parent.joinpath('default_config.yaml')
+        with open(default_config_file) as dcf:
+            self.default_params = yaml.load(dcf)
+            
+        # load user config file
+        with open(self.config_file) as cf:
+            self.hparams = yaml.load(cf, Loader=yaml.RoundTripLoader)
+        
+        # merge the two dicts
+        self.merge_dicts()
+        
+        # sanity check on data_folder provided by user
+        self.data_path = self.is_path(self.hparams['data_folder'])
+        
+        # check whether distributed learning
+        gpu_count = torch.cuda.device_count()
+        self.hparams['gpu_count'] = gpu_count
+        self.hparams['effective_batch_size'] = self.hparams['batch_size'] * gpu_count
+        
+        # make model name
+        self.create_model_name()
+            
+    def is_path(self, path):
+        # check for path - assuming absolute path was given
+        filepath = Path(path)
+        if not filepath.exists():
+            # assuming path was given relative to rootdir
+            filepath = self.rootdir.joinpath(filepath)
+        if not filepath.exists():
+            raise FileNotFoundError(f"{path} not found. Define relative to project directory or as absolute path in config file/argument passing.")
+        
+        return filepath
     
-    # check for data folder
-    data_folder = Path(config['data_folder'])
-    if not data_folder.exists():
-        # try relative to project dir - in this case overwrite config
-        data_folder = rootdir.joinpath(config['data_folder'])
-    if not data_folder.exists():
-        raise FileNotFoundError("Data path not found. Define relative to the project directory or as absolute path in config file")
+    def merge_dicts(self):
+        """ adds to the user_params dictionnary any missing key from the default params """
+        
+        for k, v in self.default_params.items():
+            if k not in self.hparams:
+                self.hparams[k] = v
+            # TO DO - ENSURE NOT COPYING IRRELEVANT DATA e.g. GAN parameters if model is AE
     
-    # additional info from args and miscellaneous to save in config
-    config['build date'] = datetime.now().strftime("%Y-%m-%d %H.%M.%S")
-    config['model_name'] = full_name
-    config['project_dir'] = str(rootdir)
-    config['data_folder'] = str(data_folder)
-    config['config_file'] = str(config_file)
-    config['k_fold'] = arguments.kfold
-    config['precision'] = arguments.precision
-    if 'acc_grad_batches' not in config:
-        config['acc_grad_batches'] = 1
+    def create_model_name(self):
+        
+        data_shape = 'x'.join(map(str, self.hparams['data_shape']))
+        base_name = f"{self.hparams['module']}_{self.hparams['version_name']}_{self.hparams['data_generator']}"
+        dat_name = f"bz{self.hparams['effective_batch_size']}_{data_shape}"
+        self.hparams['model_name'] = f"{base_name}_{dat_name}_k{self.args.kfold}_e{self.hparams['epoch']}"
 
-    return config
-
-
-def copy_model_config(path, config):
-    model_name = config['model_name']
-    config_file = path.joinpath(f"config_{model_name}.yaml")
-    config.yaml_set_start_comment(f'Config file for {model_name}')
-    with open(config_file, 'w') as file:
-        yaml.dump(config, file, Dumper=yaml.RoundTripDumper)
+    def fill_additional_info(self):
+        # additional info from args and miscellaneous to save in config
+        self.hparams['build date'] = datetime.now().strftime("%Y-%m-%d %H.%M.%S")
+        self.hparams['model_name'] = self.hparams['model_name']
+        self.hparams['project_dir'] = str(self.rootdir)
+        self.hparams['data_folder'] = str(self.data_path)
+        self.hparams['config_file'] = str(self.config_file)
+        self.hparams['k_fold'] = self.args.kfold
+    
+    def save_copy(self, output_dir):
+        model_name = self.hparams['model_name']
+        config_file = output_dir.joinpath(f"config_{model_name}.yaml")
+        self.hparams.yaml_set_start_comment(f'Config file for {model_name}')
+        with open(config_file, 'w') as file:
+            yaml.dump(self.hparams, file, Dumper=yaml.RoundTripDumper)
