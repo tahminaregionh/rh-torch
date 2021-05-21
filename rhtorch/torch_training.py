@@ -122,7 +122,7 @@ def main():
         print("Saved config prior to model training")
     
     # set the trainer and fit
-    accelerator = 'ddp' if configs['gpu_count'] > 1 else None
+    accelerator = 'ddp' if configs['GPUs'] > 1 else None
     trainer = pl.Trainer(max_epochs=configs['epoch'], 
                          logger=wandb_logger, 
                          callbacks=callbacks, 
