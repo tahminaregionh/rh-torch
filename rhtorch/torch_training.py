@@ -69,12 +69,14 @@ def main():
             if pretrained_model_path.name.endswith(".ckpt"):
                 # important to pass in new configs here as we want to load the weights but config may differ from pretrained model
                 model = module.load_from_checkpoint(pretrained_model_path, hparams=configs, in_shape=shape_in, strict=False)
-            elif pretrained_model_path.endswith(".pt"):
+            elif pretrained_model_path.name.endswith(".pt"):
                 # this works for both .pt and .ckpt actually
                 # WARNING I don't know which of the above or below method is the correct way to load ckpt
                 # this below method only load the weights. Above also load state of optimizer, etc...
                 ckpt = torch.load(pretrained_model_path)
-                pretrained_model = ckpt['state_dict']
+                # OBS, the 'state_dict' is not set during save? 
+                # What if we are to save multiple models used later for pretrain? (e.g. a GAN with 3 networks?)
+                pretrained_model = ckpt['state_dict'] if 'state_dict' in ckpt.keys() else ckpt
                 model.load_state_dict(pretrained_model, strict=False)
             else:
                 raise ValueError("Expected model format: '.pt' or '.ckpt'.")
