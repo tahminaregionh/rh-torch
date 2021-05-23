@@ -5,7 +5,7 @@ import numpy as np
 import torch
 
 
-def plot_inline(d1, d2, d3, color_channel_axis=0):
+def plot_inline(d1, d2, d3, color_channel_axis=0, vmin=None, vmax=None):
     """
     Parameters
     ----------
@@ -19,6 +19,8 @@ def plot_inline(d1, d2, d3, color_channel_axis=0):
         Axis for color channel in the numpy array . 
         Default is 0 for Pytorch models (cc, dimx, dimy, dimz)
         Use 3 for TF models (dimx, dimy, dimz, cc)
+    vmin : Lower bound for color channel. Default (None) used to plot full range
+    vmax : Upper bound for color channel. Default (None) used to plot full range
 
     """
     # If input has more than 1 color channel, use only the first
@@ -33,15 +35,12 @@ def plot_inline(d1, d2, d3, color_channel_axis=0):
     orient = 0
     text_pos = d1.size(2) * 0.98
     
-    # make a list of subplot titles - may need several input subtitles - this is unnecessary if only plotting 1 input
-    # titles = [f"Input{i+1}" for i in range(d1.size(color_channel_axis))]
-    # titles.extend(['Target', 'Prediction'])
     titles = ['Input', 'Target', 'Prediction']
     
     for idx in range(num_dat):
         single_data = d_arr.take(indices=idx, axis=color_channel_axis) 
         ax[idx].imshow(single_data.take(indices=slice_i, axis=orient), 
-                       cmap='gray') #, vmin=0, vmax=1)
+                       cmap='gray', vmin=vmin, vmax=vmax)
         ax[idx].axis('off')
         ax[idx].text(3, text_pos, titles[idx], color='white', fontsize=12)
         
@@ -51,9 +50,11 @@ def plot_inline(d1, d2, d3, color_channel_axis=0):
     return wandb_im
 
 class ImagePredictionLogger(Callback):
-    def __init__(self, val_dataloader):
+    def __init__(self, val_dataloader, config=None):
         super().__init__()
         self.X, self.y = next(iter(val_dataloader))
+        
+        # TODO: Read config file to parse vmin, vmax or e.g. custom titles
         
     def on_validation_epoch_end(self, trainer, pl_module):
         # Dataloader loads on CPU --> pass to GPU
