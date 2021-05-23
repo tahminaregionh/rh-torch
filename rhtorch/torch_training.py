@@ -12,7 +12,7 @@ from pathlib import Path
 # library package imports
 from rhtorch.models import modules
 from rhtorch.callbacks import plotting
-from rhtorch.config_utils import load_model_config, copy_model_config
+from rhtorch.config_utils import UserConfig
 
 def main():
     import argparse
@@ -30,8 +30,9 @@ def main():
     is_test = args.test
 
     # load configs from file + additional info from args
-    configs = load_model_config(project_dir, args)
-
+    user_configs = UserConfig(project_dir, args)
+    configs = user_configs.hparams   ### WARNING TO CHECK IF THIS is 2 names for the same memory address or 2 distinct memory addresses (matters when saving copy in the end)
+    
     # Set local data_generator
     sys.path.insert(1, args.input)
     import data_generator
@@ -61,19 +62,21 @@ def main():
     model = module(configs, shape_in)
     
     # transfer learning setup
-    if 'pretrained_generator' in configs:
+    if configs['pretrained_generator']:
         print("Setting up transfer learning")
         pretrained_model_path = Path(configs['pretrained_generator'])
         if pretrained_model_path.exists():
             if pretrained_model_path.name.endswith(".ckpt"):
                 # important to pass in new configs here as we want to load the weights but config may differ from pretrained model
                 model = module.load_from_checkpoint(pretrained_model_path, hparams=configs, in_shape=shape_in, strict=False)
-            elif pretrained_model_path.endswith(".pt"):
+            elif pretrained_model_path.name.endswith(".pt"):
                 # this works for both .pt and .ckpt actually
                 # WARNING I don't know which of the above or below method is the correct way to load ckpt
                 # this below method only load the weights. Above also load state of optimizer, etc...
                 ckpt = torch.load(pretrained_model_path)
-                pretrained_model = ckpt['state_dict']
+                # OBS, the 'state_dict' is not set during save? 
+                # What if we are to save multiple models used later for pretrain? (e.g. a GAN with 3 networks?)
+                pretrained_model = ckpt['state_dict'] if 'state_dict' in ckpt.keys() else ckpt
                 model.load_state_dict(pretrained_model, strict=False)
             else:
                 raise ValueError("Expected model format: '.pt' or '.ckpt'.")
@@ -117,15 +120,16 @@ def main():
     
     # Save the config prior to training the model - one for each time the script is started
     if not is_test:        
-        copy_model_config(model_path, configs, append_timestamp=True)
+        user_configs.save_copy(model_path, append_timestamp=True)
         print("Saved config prior to model training")
     
     # set the trainer and fit
+    accelerator = 'ddp' if configs['GPUs'] > 1 else None
     trainer = pl.Trainer(max_epochs=configs['epoch'], 
                          logger=wandb_logger, 
                          callbacks=callbacks, 
                          gpus=-1, 
-                         accelerator='ddp',
+                         accelerator=accelerator,
                          resume_from_checkpoint=existing_checkpoint,
                          auto_select_gpus=True,
                          accumulate_grad_batches=configs['acc_grad_batches'],
@@ -136,12 +140,12 @@ def main():
     trainer.fit(model, train_dataloader, valid_dataloader)
 
     # add useful info to saved configs
-    configs['best_model'] = checkpoint_callback.best_model_path
+    user_configs.hparams['best_model'] = checkpoint_callback.best_model_path
 
     # save the model
     output_file = model_path.joinpath(f"{configs['model_name']}.pt")
     torch.save(model.state_dict(), output_file)
-    copy_model_config(model_path, configs)
+    user_configs.save_copy(model_path)
     print("Saved model and config file to disk")
     
 
