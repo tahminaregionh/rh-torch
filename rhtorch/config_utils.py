@@ -44,10 +44,11 @@ class UserConfig:
     def merge_dicts(self):
         """ adds to the user_params dictionnary any missing key from the default params """
         
-        for k, v in self.default_params.items():
-            if k not in self.hparams:
-                self.hparams[k] = v
-            ### TO DO - ENSURE NOT COPYING IRRELEVANT DATA e.g. GAN parameters if model is AE
+        for key, value in self.default_params.items():
+            # copy from default if value is not None/0/False and key not already in user config
+            if value and key not in self.hparams:
+                self.hparams[key] = value
+            
 
     def fill_additional_info(self):
         # additional info from args and miscellaneous to save in config

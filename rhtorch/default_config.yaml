@@ -24,10 +24,10 @@ pretrained_generator: null           # absolute path to .pt or .ckpt
 freeze_encoder: False
 
 # discriminator - will be used if model is GAN
-discriminator: ConvNetDiscriminator
-d_optimizer: Adam
-d_lr: 2e-4
-d_loss: BCEWithLogitsLoss
+discriminator: null
+d_optimizer: null
+d_lr: null
+d_loss: null
 
 # data:
 data_split_pkl: data_split.pickle       # inside data folder .json or .pickle

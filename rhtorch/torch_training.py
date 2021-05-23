@@ -31,7 +31,7 @@ def main():
 
     # load configs from file + additional info from args
     user_configs = UserConfig(project_dir, args)
-    configs = user_configs.hparams   ### WARNING TO CHECK IF THIS is 2 names for the same memory address or 2 distinct memory addresses (matters when saving copy in the end)
+    configs = user_configs.hparams
     
     # Set local data_generator
     sys.path.insert(1, args.input)
