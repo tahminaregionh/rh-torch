@@ -65,7 +65,7 @@ class UserConfig:
         
         data_shape = 'x'.join(map(str, self.hparams['data_shape']))
         base_name = f"{self.hparams['module']}_{self.hparams['version_name']}_{self.hparams['data_generator']}"
-        dat_name = f"bz{self.hparams['global_batch_size']}_{data_shape}"
+        dat_name = f"bz{self.hparams['batch_size']}_{data_shape}"
         self.hparams['model_name'] = f"{base_name}_{dat_name}_k{self.args.kfold}_e{self.hparams['epoch']}"
     
     def save_copy(self, output_dir, append_timestamp=False):
