@@ -140,7 +140,7 @@ def main():
     trainer.fit(model, train_dataloader, valid_dataloader)
 
     # add useful info to saved configs
-    configs['best_model'] = checkpoint_callback.best_model_path
+    user_configs.hparams['best_model'] = checkpoint_callback.best_model_path
 
     # save the model
     output_file = model_path.joinpath(f"{configs['model_name']}.pt")
