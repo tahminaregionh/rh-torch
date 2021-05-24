@@ -62,7 +62,7 @@ def main():
     model = module(configs, shape_in)
     
     # transfer learning setup
-    if configs['pretrained_generator']:
+    if 'pretrained generator' in configs and configs['pretrained_generator']:
         print("Setting up transfer learning")
         pretrained_model_path = Path(configs['pretrained_generator'])
         if pretrained_model_path.exists():
