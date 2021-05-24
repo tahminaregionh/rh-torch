@@ -4,7 +4,103 @@ import torch.nn.functional as F
 from torch.nn.init import kaiming_normal_
 import numpy as np
 
+class Block(nn.Module):
+    """ Double conv layer used as feature extractor in encoder/decoder"""
+    def __init__(self, in_c, out_c, dropout=.2):
+        super().__init__()
+        self.double_conv = nn.Sequential(
+            # conv 1
+            nn.Conv3d(in_c, out_c, kernel_size=3, stride=1, padding=1, padding_mode='replicate'),
+            # PyTorch initialises weights based on the non-linearity used after the Conv Layer: Kaiming He for ReLU
+            nn.BatchNorm3d(out_c),
+            nn.ReLU(inplace=True),
+            nn.Dropout(dropout),
+            # conv 2
+            nn.Conv3d(out_c, out_c, kernel_size=3, stride=1, padding=1, padding_mode='replicate'),
+            nn.BatchNorm3d(out_c),
+            nn.ReLU(inplace=True),
+            nn.Dropout(dropout)
+        )
 
+    def forward(self, x):
+        return self.double_conv(x)
+
+class DownsamplingBlock(nn.Module):
+    """ Downsampling block using a Convolutional layer with stride=2 """
+    def __init__(self, in_c, out_c, kernel_size=3, stride=2):
+        super().__init__()
+        self.downsample = nn.Sequential(
+            nn.Conv3d(in_c, out_c, kernel_size=kernel_size, stride=stride, padding=1, padding_mode='replicate'),
+            nn.BatchNorm3d(out_c),
+            nn.ReLU(inplace=True)
+        )
+        
+    def forward(self, x):
+        return self.downsample(x)
+    
+
+class UpsamplingBlock(nn.Module):
+    """ Upsampling block obtained from ConvTranspose3D layer """
+    def __init__(self, in_c, out_c, kernel_size=3, stride=2):
+        super().__init__()
+        self.upsample = nn.Sequential(
+            nn.ConvTranspose3d(in_c, out_c, kernel_size=kernel_size, stride=stride, padding=1, output_padding=1),
+            nn.BatchNorm3d(out_c),
+            nn.ReLU(inplace=True)
+        )
+    
+    def forward(self, x):
+        return self.upsample(x)
+
+class Encoder(nn.Module):
+    def __init__(self, in_channels, chs=(64,128,256,512,1024)):
+        super().__init__()
+        self.chs = (in_channels, *chs)
+        self.num_step = len(self.chs) -1
+        self.enc_blocks = nn.ModuleList([Block(self.chs[i], self.chs[i+1]) for i in range(self.num_step)])
+        self.pool = nn.MaxPool3d(kernel_size=3, stride=2, padding=1)
+    
+    def forward(self, x):
+        ftrs = []
+        for block in self.enc_blocks:
+            x = block(x)
+            ftrs.append(x)
+            x = self.pool(x)
+        return ftrs
+
+
+class Decoder(nn.Module):
+    def __init__(self, chs=(1024, 512, 256, 128, 64)):
+        super().__init__()
+        self.num_step = len(chs) -1
+        self.upconvs = nn.ModuleList([UpsamplingBlock(chs[i], chs[i+1]) for i in range(self.num_step)])
+        self.dec_blocks = nn.ModuleList([Block(chs[i], chs[i+1]) for i in range(self.num_step)]) 
+        
+    def forward(self, x, encoder_features):
+        for i in range(self.num_step):
+            x = self.upconvs[i](x)
+            enc_ftrs = encoder_features[i]
+            x = torch.cat([x, enc_ftrs], dim=1)
+            x = self.dec_blocks[i](x)
+        return x
+
+
+class UNet3D(nn.Module):
+    def __init__(self, in_channels, enc_chs=(64,128,256,512,1024)):
+        super().__init__()
+        # decoding channels dims are the same as encoding channels but inverted
+        dec_chs = enc_chs[::-1]
+        self.encoder = Encoder(in_channels, enc_chs)
+        self.decoder = Decoder(dec_chs)
+        self.head =  nn.Conv3d(in_channels=dec_chs[-1], out_channels=1, kernel_size=3, padding=1, padding_mode='replicate')
+
+    def forward(self, x):
+        enc_ftrs = self.encoder(x)
+        out = self.decoder(enc_ftrs[::-1][0], enc_ftrs[::-1][1:])
+        return self.head(out)
+    
+
+################################## THIS IS SAFE DOWN THERE #################################
 def double_conv(in_c, out_c, dropout=.2):
     conv = nn.Sequential(
         # conv 1
