@@ -1,6 +1,6 @@
 # main config to train models
-project_name: YOUR_PROJECT_NAME       # Used for WANDB
-version_name: v0                      # Make run unique by changing this counter
+project_name: YOUR_PROJECT_NAME                                 # Used for WANDB
+version_name: v0                                                # Make run unique by changing this counter
 
 # main model:
 precision: 32
@@ -20,7 +20,7 @@ g_lr: 1e-4
 g_loss: MeanAbsoluteError
 
 # transfer learning
-pretrained_generator: null           # absolute path to .pt or .ckpt
+pretrained_generator: null                                      # absolute path to .pt or .ckpt
 freeze_encoder: False
 
 # discriminator - will be used if model is GAN
@@ -30,9 +30,9 @@ d_lr: null
 d_loss: null
 
 # data:
-data_split_pkl: data_split.pickle       # inside data folder .json or .pickle
+data_split_pkl: data_split_file_inside_data_folder.pickle       # inside data folder .json or .pickle
 data_generator: DefaultDataLoader
-data_folder: Data/data_noblur_25_64x64x64    # inside project dir
+data_folder: data_folder_inside_project_dir                     # inside project dir
 pet_normalization_constant: 32676
 augment: True
 data_shape: [64,64,64]
@@ -43,7 +43,8 @@ repeat_patient_list: 1
 # full_data_shape: [64,64,64]
 # loading_style: 'volume', 'patch'
 # input_data_shape: [8,8,8] for patch or [16,64,64] for slice
+
 # for plotting during training
-callback_image2image: ImagePredictionLogger
+callback_image2image: null
 
 # model-specific info (self-generated) - do not write anything beyond here
