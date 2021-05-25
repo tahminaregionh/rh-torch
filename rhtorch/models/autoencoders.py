@@ -1,8 +1,5 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from torch.nn.init import kaiming_normal_
-import numpy as np
 
 
 class Block(nn.Module):
