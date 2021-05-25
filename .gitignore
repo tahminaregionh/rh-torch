@@ -3,4 +3,5 @@ __pycache__
 wandb/
 rhtorch.egg-info
 .vscode/
-rhtorch/models/dev
+rhtorch/models/dev/*
+!rhtorch/models/dev/__init__.py
