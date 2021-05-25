@@ -62,7 +62,7 @@ class UpsamplingBlock(nn.Module):
 
 
 class Encoder(nn.Module):
-    def __init__(self, in_channels, chs=[64, 128, 256, 512, 1024], pooling='full_conv', f_act='ReLU'):
+    def __init__(self, in_channels, chs, pooling, f_act):
         super().__init__()
         self.chs = (in_channels, *chs)
         self.depth = len(self.chs) - 1
@@ -85,7 +85,7 @@ class Encoder(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, chs=[1024, 512, 256, 128, 64], f_act='ReLU'):
+    def __init__(self, chs, f_act):
         super().__init__()
         self.depth = len(chs) - 1
         self.upconvs = nn.ModuleList(
@@ -103,15 +103,12 @@ class Decoder(nn.Module):
 
 
 class UNet3D(nn.Module):
-    def __init__(self, in_channels, **kwargs):
+    def __init__(self, in_channels, g_filters=[64, 128, 256, 512, 1024], g_pooling_type='full_conv', g_activation='ReLU', **kwargs):
         super().__init__()
         # decoding channels dims are the same as encoding channels but inverted
-        enc_chs = kwargs['g_filters']
-        pooling_type = kwargs['g_pooling_type']
-        activation = kwargs['g_activation']
-        dec_chs = enc_chs[::-1]
-        self.encoder = Encoder(in_channels, enc_chs, pooling_type, activation)
-        self.decoder = Decoder(dec_chs, activation)
+        dec_chs = g_filters[::-1]
+        self.encoder = Encoder(in_channels, g_filters, g_pooling_type, g_activation)
+        self.decoder = Decoder(dec_chs, g_activation)
         self.head = nn.Conv3d(
             in_channels=dec_chs[-1], out_channels=1, kernel_size=3, padding=1, padding_mode='replicate')
 
@@ -121,7 +118,9 @@ class UNet3D(nn.Module):
         out = self.decoder(enc_ftrs[0], enc_ftrs[1:])
         return self.head(out)
 
-
+"""
+UNet-like network that never uses striding, so no downsampling is performed.
+"""
 class AEFlatpseudo2D(nn.Module):
 
     def __init__(self, in_channels=1, **kwargs):
@@ -170,83 +169,45 @@ class AEFlatpseudo2D(nn.Module):
         return self.ReLU(x10+image)
 
 
-class ResidualConv(nn.Module):
-    def __init__(self, input_dim, output_dim, stride, padding):
-        super(ResidualConv, self).__init__()
-
-        self.conv_block = nn.Sequential(
-            nn.BatchNorm3d(input_dim),
-            nn.ReLU(),
-            nn.Conv3d(
-                input_dim, output_dim, kernel_size=3, stride=stride, padding=padding
-            ),
-            nn.BatchNorm3d(output_dim),
-            nn.ReLU(),
-            nn.Conv3d(output_dim, output_dim, kernel_size=3, padding=1),
-        )
-        self.conv_skip = nn.Sequential(
-            nn.Conv3d(input_dim, output_dim, kernel_size=3,
-                      stride=stride, padding=1),
-            nn.BatchNorm3d(output_dim),
-        )
-
-    def forward(self, x):
-
-        return self.conv_block(x) + self.conv_skip(x)
-
-
-class Upsample(nn.Module):
-    def __init__(self, input_dim, output_dim, kernel, stride):
-        super(Upsample, self).__init__()
-
-        self.upsample = nn.ConvTranspose3d(
-            input_dim, output_dim, kernel_size=kernel, stride=stride
-        )
-
-    def forward(self, x):
-        return self.upsample(x)
-
-
 class Res3DUnet(nn.Module):
-    def __init__(self, in_channels, do_sigmoid=False, **kwargs):
-        super(Res3DUnet, self).__init__()
+    def __init__(self, in_channels, g_filters=[64, 128, 256, 512], do_sigmoid=False, **kwargs):
+        super().__init__()
 
-        filters = kwargs['g_filters']
         self.input_layer = nn.Sequential(
-            nn.Conv3d(in_channels, filters[0], kernel_size=3, padding=1),
-            nn.BatchNorm3d(filters[0]),
+            nn.Conv3d(in_channels, g_filters[0], kernel_size=3, padding=1),
+            nn.BatchNorm3d(g_filters[0]),
             nn.ReLU(),
-            nn.Conv3d(filters[0], filters[0], kernel_size=3, padding=1),
+            nn.Conv3d(g_filters[0], g_filters[0], kernel_size=3, padding=1),
         )
         self.input_skip = nn.Sequential(
-            nn.Conv3d(in_channels, filters[0], kernel_size=3, padding=1)
+            nn.Conv3d(in_channels, g_filters[0], kernel_size=3, padding=1)
         )
 
-        self.residual_conv_1 = ResidualConv(filters[0], filters[1], 2, 1)
-        self.residual_conv_2 = ResidualConv(filters[1], filters[2], 2, 1)
+        self.residual_conv_1 = self.ResidualConv(g_filters[0], g_filters[1], 2, 1)
+        self.residual_conv_2 = self.ResidualConv(g_filters[1], g_filters[2], 2, 1)
 
-        self.bridge = ResidualConv(filters[2], filters[3], 2, 1)
+        self.bridge = self.ResidualConv(g_filters[2], g_filters[3], 2, 1)
 
-        self.upsample_1 = Upsample(filters[3], filters[3], 2, 2)
-        self.up_residual_conv1 = ResidualConv(
-            filters[3] + filters[2], filters[2], 1, 1)
+        self.upsample_1 = self.Upsample(g_filters[3], g_filters[3], 2, 2)
+        self.up_residual_conv1 = self.ResidualConv(
+            g_filters[3] + g_filters[2], g_filters[2], 1, 1)
 
-        self.upsample_2 = Upsample(filters[2], filters[2], 2, 2)
-        self.up_residual_conv2 = ResidualConv(
-            filters[2] + filters[1], filters[1], 1, 1)
+        self.upsample_2 =self.Upsample(g_filters[2], g_filters[2], 2, 2)
+        self.up_residual_conv2 = self.ResidualConv(
+            g_filters[2] + g_filters[1], g_filters[1], 1, 1)
 
-        self.upsample_3 = Upsample(filters[1], filters[1], 2, 2)
-        self.up_residual_conv3 = ResidualConv(
-            filters[1] + filters[0], filters[0], 1, 1)
+        self.upsample_3 = self.Upsample(g_filters[1], g_filters[1], 2, 2)
+        self.up_residual_conv3 = self.ResidualConv(
+            g_filters[1] + g_filters[0], g_filters[0], 1, 1)
 
         if do_sigmoid:
             self.output_layer = nn.Sequential(
-                nn.Conv3d(filters[0], 1, 1, 1),
+                nn.Conv3d(g_filters[0], 1, 1, 1),
                 nn.Sigmoid(),
             )
         else:
             self.output_layer = nn.Sequential(
-                nn.Conv3d(filters[0], 1, 1, 1),
+                nn.Conv3d(g_filters[0], 1, 1, 1),
             )
 
     def forward(self, x):
@@ -275,3 +236,39 @@ class Res3DUnet(nn.Module):
         output = self.output_layer(x10)
 
         return output
+    
+    class ResidualConv(nn.Module):
+        def __init__(self, input_dim, output_dim, stride, padding):
+            super().__init__()
+    
+            self.conv_block = nn.Sequential(
+                nn.BatchNorm3d(input_dim),
+                nn.ReLU(),
+                nn.Conv3d(
+                    input_dim, output_dim, kernel_size=3, stride=stride, padding=padding
+                ),
+                nn.BatchNorm3d(output_dim),
+                nn.ReLU(),
+                nn.Conv3d(output_dim, output_dim, kernel_size=3, padding=1),
+            )
+            self.conv_skip = nn.Sequential(
+                nn.Conv3d(input_dim, output_dim, kernel_size=3,
+                          stride=stride, padding=1),
+                nn.BatchNorm3d(output_dim),
+            )
+    
+        def forward(self, x):
+    
+            return self.conv_block(x) + self.conv_skip(x)
+    
+    
+    class Upsample(nn.Module):
+        def __init__(self, input_dim, output_dim, kernel, stride):
+            super().__init__()
+    
+            self.upsample = nn.ConvTranspose3d(
+                input_dim, output_dim, kernel_size=kernel, stride=stride
+            )
+    
+        def forward(self, x):
+            return self.upsample(x)
