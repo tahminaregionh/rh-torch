@@ -13,7 +13,7 @@ from pathlib import Path
 from rhtorch.models import modules
 from rhtorch.callbacks import plotting
 from rhtorch.config_utils import UserConfig
-
+from rhtorch.utilities.modules import recursive_find_python_class
 
 def main():
     import argparse
@@ -65,8 +65,8 @@ def main():
 
     # define lightning module
     shape_in = data_train.data_shape_in
-    module = getattr(modules, configs['module'])
-    model = module(configs, shape_in)
+    module = recursive_find_python_class( configs['module'] )
+    model = module(configs, shape_in) # Should also be changed to custom arguments (**configs)
 
     # transfer learning setup
     if 'pretrained generator' in configs and configs['pretrained_generator']:
@@ -79,8 +79,6 @@ def main():
                     pretrained_model_path, hparams=configs, in_shape=shape_in, strict=False)
             elif pretrained_model_path.name.endswith(".pt"):
                 ckpt = torch.load(pretrained_model_path)
-                # OBS, the 'state_dict' is not set during save?
-                # What if we are to save multiple models used later for pretrain? (e.g. a GAN with 3 networks?)
                 pretrained_model = ckpt['state_dict'] if 'state_dict' in ckpt else ckpt
                 model.load_state_dict(pretrained_model, strict=False)
             else:
@@ -89,6 +87,7 @@ def main():
             raise FileNotFoundError(
                 "Model file not found. Check your path in config file.")
 
+        # This should be more generic. What if we are to only freeze some of the layers?
         if 'freeze_encoder' in configs and configs['freeze_encoder']:
             message += "with frozen encoder."
             model.encoder.freeze()
