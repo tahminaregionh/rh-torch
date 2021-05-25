@@ -4,19 +4,22 @@ import torch.nn.functional as F
 from torch.nn.init import kaiming_normal_
 import numpy as np
 
+
 class Block(nn.Module):
     """ Double conv layer used as feature extractor in encoder/decoder"""
+
     def __init__(self, in_c, out_c, dropout=.2):
         super().__init__()
         self.double_conv = nn.Sequential(
             # conv 1
-            nn.Conv3d(in_c, out_c, kernel_size=3, stride=1, padding=1, padding_mode='replicate'),
-            # PyTorch initialises weights based on the non-linearity used after the Conv Layer: Kaiming He for ReLU
+            nn.Conv3d(in_c, out_c, kernel_size=3, stride=1,
+                      padding=1, padding_mode='replicate'),
             nn.BatchNorm3d(out_c),
             nn.ReLU(inplace=True),
             nn.Dropout(dropout),
             # conv 2
-            nn.Conv3d(out_c, out_c, kernel_size=3, stride=1, padding=1, padding_mode='replicate'),
+            nn.Conv3d(out_c, out_c, kernel_size=3, stride=1,
+                      padding=1, padding_mode='replicate'),
             nn.BatchNorm3d(out_c),
             nn.ReLU(inplace=True),
             nn.Dropout(dropout)
@@ -25,41 +28,52 @@ class Block(nn.Module):
     def forward(self, x):
         return self.double_conv(x)
 
+
 class DownsamplingBlock(nn.Module):
     """ Downsampling block using a Convolutional layer with stride=2 """
+
     def __init__(self, in_c, out_c, kernel_size=3, stride=2):
         super().__init__()
         self.downsample = nn.Sequential(
-            nn.Conv3d(in_c, out_c, kernel_size=kernel_size, stride=stride, padding=1, padding_mode='replicate'),
+            nn.Conv3d(in_c, out_c, kernel_size=kernel_size,
+                      stride=stride, padding=1, padding_mode='replicate'),
             nn.BatchNorm3d(out_c),
             nn.ReLU(inplace=True)
         )
-        
+
     def forward(self, x):
         return self.downsample(x)
-    
+
 
 class UpsamplingBlock(nn.Module):
     """ Upsampling block obtained from ConvTranspose3D layer """
+
     def __init__(self, in_c, out_c, kernel_size=3, stride=2):
         super().__init__()
         self.upsample = nn.Sequential(
-            nn.ConvTranspose3d(in_c, out_c, kernel_size=kernel_size, stride=stride, padding=1, output_padding=1),
+            nn.ConvTranspose3d(in_c, out_c, kernel_size=kernel_size,
+                               stride=stride, padding=1, output_padding=1),
             nn.BatchNorm3d(out_c),
             nn.ReLU(inplace=True)
         )
-    
+
     def forward(self, x):
         return self.upsample(x)
 
+
 class Encoder(nn.Module):
-    def __init__(self, in_channels, chs=(64,128,256,512,1024)):
+    def __init__(self, in_channels, chs=(64, 128, 256, 512, 1024), pooling='full_conv'):
         super().__init__()
         self.chs = (in_channels, *chs)
-        self.num_step = len(self.chs) -1
-        self.enc_blocks = nn.ModuleList([Block(self.chs[i], self.chs[i+1]) for i in range(self.num_step)])
-        self.pool = nn.MaxPool3d(kernel_size=3, stride=2, padding=1)
-    
+        self.num_step = len(self.chs) - 1
+        self.enc_blocks = nn.ModuleList(
+            [Block(self.chs[i], self.chs[i+1]) for i in range(self.num_step)])
+        if pooling == 'max_pool':
+            self.pool = nn.MaxPool3d(kernel_size=3, stride=2, padding=1)
+        elif pooling == 'full_conv':
+            self.pool = nn.ModuleList(
+                [DownsamplingBlock(chs[i], chs[i+1]) for i in range(self.num_step)])
+
     def forward(self, x):
         ftrs = []
         for block in self.enc_blocks:
@@ -72,10 +86,12 @@ class Encoder(nn.Module):
 class Decoder(nn.Module):
     def __init__(self, chs=(1024, 512, 256, 128, 64)):
         super().__init__()
-        self.num_step = len(chs) -1
-        self.upconvs = nn.ModuleList([UpsamplingBlock(chs[i], chs[i+1]) for i in range(self.num_step)])
-        self.dec_blocks = nn.ModuleList([Block(chs[i], chs[i+1]) for i in range(self.num_step)]) 
-        
+        self.num_step = len(chs) - 1
+        self.upconvs = nn.ModuleList(
+            [UpsamplingBlock(chs[i], chs[i+1]) for i in range(self.num_step)])
+        self.dec_blocks = nn.ModuleList(
+            [Block(chs[i], chs[i+1]) for i in range(self.num_step)])
+
     def forward(self, x, encoder_features):
         for i in range(self.num_step):
             x = self.upconvs[i](x)
@@ -86,233 +102,67 @@ class Decoder(nn.Module):
 
 
 class UNet3D(nn.Module):
-    def __init__(self, in_channels, enc_chs=(64,128,256,512,1024)):
+    def __init__(self, in_channels, enc_chs=(64, 128, 256, 512, 1024), pooling_type='full_conv'):
         super().__init__()
         # decoding channels dims are the same as encoding channels but inverted
         dec_chs = enc_chs[::-1]
-        self.encoder = Encoder(in_channels, enc_chs)
+        self.encoder = Encoder(in_channels, enc_chs, pooling_type)
         self.decoder = Decoder(dec_chs)
-        self.head =  nn.Conv3d(in_channels=dec_chs[-1], out_channels=1, kernel_size=3, padding=1, padding_mode='replicate')
+        self.head = nn.Conv3d(
+            in_channels=dec_chs[-1], out_channels=1, kernel_size=3, padding=1, padding_mode='replicate')
 
     def forward(self, x):
         enc_ftrs = self.encoder(x)
-        out = self.decoder(enc_ftrs[::-1][0], enc_ftrs[::-1][1:])
+        enc_ftrs = enc_ftrs[::-1]
+        out = self.decoder(enc_ftrs[0], enc_ftrs[1:])
         return self.head(out)
-    
-
-################################## THIS IS SAFE DOWN THERE #################################
-def double_conv(in_c, out_c, dropout=.2):
-    conv = nn.Sequential(
-        # conv 1
-        nn.Conv3d(in_c, out_c, kernel_size=3, stride=1, padding=1, padding_mode='replicate'),
-        # PyTorch initialises weights based on the non-linearity used after the Conv Layer: Kaiming He for ReLU
-        nn.BatchNorm3d(out_c),
-        nn.ReLU(inplace=True),
-        # nn.Dropout3d(dropout, inplace=True),
-        nn.Dropout(dropout),
-        # conv 2
-        nn.Conv3d(out_c, out_c, kernel_size=3, stride=1, padding=1, padding_mode='replicate'),
-        nn.BatchNorm3d(out_c),
-        nn.ReLU(inplace=True),
-        nn.Dropout(dropout)
-    )
-    return conv
-
-
-def downsample_conv(in_c, out_c,kernel_size=3,stride=2):
-    downsample = nn.Sequential(
-        nn.Conv3d(in_c, out_c, kernel_size=kernel_size, stride=stride, padding=1, padding_mode='replicate'),
-        nn.BatchNorm3d(out_c),
-        nn.ReLU(inplace=True)
-    )
-    return downsample
-    
-
-def up_convt(in_c, out_c,kernel_size=3, stride=2):
-    convt = nn.Sequential(
-        nn.ConvTranspose3d(in_c, out_c, kernel_size=kernel_size, stride=stride, padding=1, output_padding=1),
-        nn.BatchNorm3d(out_c),
-        nn.ReLU(inplace=True)
-    )
-    return convt
-    
-
-class UNet3DMaxPool(nn.Module):
-    def __init__(self, in_channels=1):
-        super().__init__()
-        # Encoder layers
-        self.max_pool3d = nn.MaxPool3d(kernel_size=3, stride=2, padding=1)
-        self.dconv1 = double_conv(in_channels, 64)
-        self.dconv2 = double_conv(64, 128)
-        self.dconv3 = double_conv(128, 256)
-        self.dconv4 = double_conv(256, 512)
-        self.dconv5 = double_conv(512, 1024)
-        
-        # Decoder layers
-        self.up_trans1 = up_convt(1024, 512)
-        self.up_conv1 = double_conv(1024, 512)
-        self.up_trans2 = up_convt(512, 256)
-        self.up_conv2 = double_conv(512, 256)
-        self.up_trans3 = up_convt(256, 128)
-        self.up_conv3 = double_conv(256, 128)
-        self.up_trans4 = up_convt(128, 64)
-        self.up_conv4 = double_conv(128, 64)
-        
-        # Output image
-        self.out = nn.Conv3d(in_channels=64,
-                             out_channels=1,
-                             kernel_size=3, 
-                             padding=1, 
-                             padding_mode='replicate')
-
-    def forward(self, image):
-        """ image.size: (Batch size, Color channels, Depth, Height, Width) """
-        
-        # ENCODER
-        x1 = self.dconv1(image)
-        x2 = self.max_pool3d(x1)
-
-        x3 = self.dconv2(x2)
-        x4 = self.max_pool3d(x3)
-
-        x5 = self.dconv3(x4)
-        x6 = self.max_pool3d(x5)
-
-        x7 = self.dconv4(x6)
-        x8 = self.max_pool3d(x7)
-        
-        x9 = self.dconv5(x8)
-
-        # DECODER
-        x = self.up_trans1(x9)
-        x = self.up_conv1(torch.cat([x, x7], dim=1))
-        
-        x = self.up_trans2(x)
-        x = self.up_conv2(torch.cat([x, x5], dim=1))
-
-        x = self.up_trans3(x)
-        x = self.up_conv3(torch.cat([x, x3], dim=1))
-
-        x = self.up_trans4(x)
-        x = self.up_conv4(torch.cat([x, x1], dim=1))
-
-        return self.out(x)
-    
-    
-class UNet3DFullConv(nn.Module):
-    def __init__(self, in_channels=1):
-        super().__init__()
-        # Encoder layers
-        self.dconv1 = double_conv(in_channels, 64)
-        self.downs1 = downsample_conv(64, 128)
-        
-        self.dconv2 = double_conv(128, 128)
-        self.downs2 = downsample_conv(128, 256)
-        
-        self.dconv3 = double_conv(256, 256)
-        self.downs3 = downsample_conv(256, 512)
-        
-        self.dconv4 = double_conv(512, 512)
-        self.downs4 = downsample_conv(512, 1024)
-        
-        # bottom layer
-        self.dconv5 = double_conv(1024, 1024)
-        
-        # Decoder layers
-        self.up_trans1 = up_convt(1024, 512)
-        self.up_conv1 = double_conv(1024, 512)
-        self.up_trans2 = up_convt(512, 256)
-        self.up_conv2 = double_conv(512, 256)
-        self.up_trans3 = up_convt(256, 128)
-        self.up_conv3 = double_conv(256, 128)
-        self.up_trans4 = up_convt(128, 64)
-        self.up_conv4 = double_conv(128, 64)
-        
-        # Output image
-        self.out = nn.Conv3d(in_channels=64,
-                             out_channels=1,
-                             kernel_size=3, 
-                             padding=1, 
-                             padding_mode='replicate')
-
-    def forward(self, image):
-        """ image.size: (Batch size, Color channels, Depth, Height, Width) """
-        
-        # ENCODER
-        x1 = self.dconv1(image)
-        x2 = self.downs1(x1)
-
-        x3 = self.dconv2(x2)
-        x4 = self.downs2(x3)
-
-        x5 = self.dconv3(x4)
-        x6 = self.downs3(x5)
-
-        x7 = self.dconv4(x6)
-        x8 = self.downs4(x7)
-        
-        x9 = self.dconv5(x8)
-
-        # DECODER
-        x = self.up_trans1(x9)
-        x = self.up_conv1(torch.cat([x, x7], dim=1))
-        
-        x = self.up_trans2(x)
-        x = self.up_conv2(torch.cat([x, x5], dim=1))
-
-        x = self.up_trans3(x)
-        x = self.up_conv3(torch.cat([x, x3], dim=1))
-
-        x = self.up_trans4(x)
-        x = self.up_conv4(torch.cat([x, x1], dim=1))
-
-        return self.out(x)
 
 
 class AEFlatpseudo2D(nn.Module):
-    
+
     def __init__(self, in_channels=1):
         super().__init__()
-        
+
         self.first = nn.Sequential(nn.Conv3d(in_channels, 32, kernel_size=3, padding=1, padding_mode='replicate'),
                                    nn.ReLU(inplace=True))
         self.conv_3d = nn.Sequential(nn.Conv3d(32, 32, kernel_size=3, padding=1, padding_mode='replicate'),
                                      nn.ReLU(inplace=True))
-        self.conv_2d = nn.Sequential(nn.Conv3d(32, 32, kernel_size=(1,3,3), padding=(0,1,1), padding_mode='replicate'),
+        self.conv_2d = nn.Sequential(nn.Conv3d(32, 32, kernel_size=(1, 3, 3), padding=(0, 1, 1), padding_mode='replicate'),
                                      nn.ReLU(inplace=True))
-        
+
         self.dconv_3d = nn.Sequential(nn.ConvTranspose3d(32, 32, kernel_size=3, padding=1),
                                       nn.ReLU(inplace=True))
-        self.dconv_2d = nn.ConvTranspose3d(32, 32, kernel_size=(1,3,3), padding=(0,1,1))
+        self.dconv_2d = nn.ConvTranspose3d(
+            32, 32, kernel_size=(1, 3, 3), padding=(0, 1, 1))
         self.last = nn.ConvTranspose3d(32, 1, kernel_size=3, padding=1)
         self.ReLU = nn.ReLU(inplace=True)
 
     def forward(self, image):
         """ image.size: (Batch size, Color channels, Depth, Height, Width) """
-        
+
         # ENCODER
         x1 = self.first(image)
         x2 = self.conv_3d(x1)
         # skip here
-        
+
         x3 = self.conv_2d(x2)
         x4 = self.conv_2d(x3)
         # skip here
         x5 = self.conv_2d(x4)
-        
+
         x6 = self.dconv_2d(x5)
         x6 = self.ReLU(x6+x4)
-        
+
         x7 = self.dconv_2d(x6)
         x7 = self.ReLU(x7)
-        
+
         x8 = self.dconv_3d(x7)
         x8 = self.ReLU(x7+x2)
-        
+
         x9 = self.dconv_3d(x8)
-        
+
         x10 = self.last(x9)
-        
+
         return self.ReLU(x10+image)
 
 
@@ -331,7 +181,8 @@ class ResidualConv(nn.Module):
             nn.Conv3d(output_dim, output_dim, kernel_size=3, padding=1),
         )
         self.conv_skip = nn.Sequential(
-            nn.Conv3d(input_dim, output_dim, kernel_size=3, stride=stride, padding=1),
+            nn.Conv3d(input_dim, output_dim, kernel_size=3,
+                      stride=stride, padding=1),
             nn.BatchNorm3d(output_dim),
         )
 
@@ -372,13 +223,16 @@ class Res3DUnet(nn.Module):
         self.bridge = ResidualConv(filters[2], filters[3], 2, 1)
 
         self.upsample_1 = Upsample(filters[3], filters[3], 2, 2)
-        self.up_residual_conv1 = ResidualConv(filters[3] + filters[2], filters[2], 1, 1)
+        self.up_residual_conv1 = ResidualConv(
+            filters[3] + filters[2], filters[2], 1, 1)
 
         self.upsample_2 = Upsample(filters[2], filters[2], 2, 2)
-        self.up_residual_conv2 = ResidualConv(filters[2] + filters[1], filters[1], 1, 1)
+        self.up_residual_conv2 = ResidualConv(
+            filters[2] + filters[1], filters[1], 1, 1)
 
         self.upsample_3 = Upsample(filters[1], filters[1], 2, 2)
-        self.up_residual_conv3 = ResidualConv(filters[1] + filters[0], filters[0], 1, 1)
+        self.up_residual_conv3 = ResidualConv(
+            filters[1] + filters[0], filters[0], 1, 1)
 
         if do_sigmoid:
             self.output_layer = nn.Sequential(
