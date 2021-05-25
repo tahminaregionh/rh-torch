@@ -3,7 +3,6 @@ import torch
 import torch.nn as nn
 import pytorch_lightning as pl
 import rhtorch
-from rhtorch.models import discriminators, autoencoders
 import torchmetrics as tm
 import math
 import pkgutil
