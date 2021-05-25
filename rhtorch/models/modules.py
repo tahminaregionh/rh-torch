@@ -2,9 +2,44 @@
 import torch
 import torch.nn as nn
 import pytorch_lightning as pl
+import rhtorch
 from rhtorch.models import discriminators, autoencoders
 import torchmetrics as tm
 import math
+import pkgutil
+import os
+import sys
+import importlib
+
+
+def recursive_find_python_class(name, folder=None, current_module="rhtorch.models"):
+
+    # Set default search path to root modules
+    if folder is None:
+        folder = [os.path.join(rhtorch.__path__[0], 'models')]
+
+    tr = None
+    for importer, modname, ispkg in pkgutil.iter_modules(folder):
+        if not ispkg:
+            m = importlib.import_module(current_module + '.' + modname)
+            if hasattr(m, name):
+                tr = getattr(m, name)
+                break
+
+    if tr is None:
+        for importer, modname, ispkg in pkgutil.iter_modules(folder):
+            if ispkg:
+                next_current_module = current_module + '.' + modname
+                tr = recursive_find_python_class(name, folder=[os.path.join(
+                    folder[0], modname)], current_module=next_current_module)
+
+            if tr is not None:
+                break
+
+    if tr is None:
+        sys.exit(f"Could not find module {name}")
+
+    return tr
 
 
 class LightningAE(pl.LightningModule):
@@ -16,10 +51,8 @@ class LightningAE(pl.LightningModule):
         self.in_channels, self.dimx, self.dimy, self.dimz = self.in_shape
 
         # generator
-        pooling_type = hparams['g_pooling_type']
-        filters = hparams['g_filters']
-        self.generator = getattr(autoencoders, hparams['generator'])(
-            self.in_channels, filters, pooling_type)
+        self.generator = recursive_find_python_class(
+            hparams['generator'])(self.in_channels)
         self.g_optimizer = getattr(torch.optim, hparams['g_optimizer'])
         self.lr = hparams['g_lr']
         self.g_loss_train = getattr(tm, hparams['g_loss'])()  # MAE
@@ -98,8 +131,8 @@ class LightningPix2Pix(LightningAE):
         self.disc_patch = (1, patchx, patchy, patchz)
 
         # discriminator
-        self.discriminator = getattr(
-            discriminators, self.hparams['discriminator'])(self.in_channels)
+        self.discriminator = recursive_find_python_class(
+            hparams['discriminator'])(self.in_channels)
         self.d_optimizer = getattr(torch.optim, self.hparams['d_optimizer'])
         self.d_lr = self.hparams['d_lr']
         # BCE with logits
