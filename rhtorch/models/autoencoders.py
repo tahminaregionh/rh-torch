@@ -8,20 +8,21 @@ import numpy as np
 class Block(nn.Module):
     """ Double conv layer used as feature extractor in encoder/decoder"""
 
-    def __init__(self, in_c, out_c, dropout=.2):
+    def __init__(self, in_c, out_c, dropout=.2, f_act='ReLU'):
         super().__init__()
+        activation_func = getattr(nn, f_act)
         self.double_conv = nn.Sequential(
             # conv 1
             nn.Conv3d(in_c, out_c, kernel_size=3, stride=1,
                       padding=1, padding_mode='replicate'),
             nn.BatchNorm3d(out_c),
-            nn.ReLU(inplace=True),
+            activation_func(inplace=True),
             nn.Dropout(dropout),
             # conv 2
             nn.Conv3d(out_c, out_c, kernel_size=3, stride=1,
                       padding=1, padding_mode='replicate'),
             nn.BatchNorm3d(out_c),
-            nn.ReLU(inplace=True),
+            activation_func(inplace=True),
             nn.Dropout(dropout)
         )
 
@@ -32,13 +33,14 @@ class Block(nn.Module):
 class DownsamplingBlock(nn.Module):
     """ Downsampling block using a Convolutional layer with stride=2 """
 
-    def __init__(self, in_c, out_c, kernel_size=3, stride=2):
+    def __init__(self, in_c, out_c, kernel_size=3, stride=2, f_act='ReLU'):
         super().__init__()
+        activation_func = getattr(nn, f_act)
         self.downsample = nn.Sequential(
             nn.Conv3d(in_c, out_c, kernel_size=kernel_size,
                       stride=stride, padding=1, padding_mode='replicate'),
             nn.BatchNorm3d(out_c),
-            nn.ReLU(inplace=True)
+            activation_func(inplace=True)
         )
 
     def forward(self, x):
@@ -48,13 +50,14 @@ class DownsamplingBlock(nn.Module):
 class UpsamplingBlock(nn.Module):
     """ Upsampling block obtained from ConvTranspose3D layer """
 
-    def __init__(self, in_c, out_c, kernel_size=3, stride=2):
+    def __init__(self, in_c, out_c, kernel_size=3, stride=2, f_act='ReLU'):
         super().__init__()
+        activation_func = getattr(nn, f_act)
         self.upsample = nn.Sequential(
             nn.ConvTranspose3d(in_c, out_c, kernel_size=kernel_size,
                                stride=stride, padding=1, output_padding=1),
             nn.BatchNorm3d(out_c),
-            nn.ReLU(inplace=True)
+            activation_func(inplace=True)
         )
 
     def forward(self, x):
@@ -62,38 +65,39 @@ class UpsamplingBlock(nn.Module):
 
 
 class Encoder(nn.Module):
-    def __init__(self, in_channels, chs=(64, 128, 256, 512, 1024), pooling='full_conv'):
+    def __init__(self, in_channels, chs=[64, 128, 256, 512, 1024], pooling='full_conv', f_act='ReLU'):
         super().__init__()
         self.chs = (in_channels, *chs)
-        self.num_step = len(self.chs) - 1
+        self.depth = len(self.chs) - 1
         self.enc_blocks = nn.ModuleList(
-            [Block(self.chs[i], self.chs[i+1]) for i in range(self.num_step)])
+            [Block(self.chs[i], self.chs[i+1], f_act=f_act) for i in range(self.depth)])
         if pooling == 'max_pool':
-            self.pool = nn.MaxPool3d(kernel_size=3, stride=2, padding=1)
+            self.pool = nn.ModuleList(
+                [nn.MaxPool3d(kernel_size=3, stride=2, padding=1)] * (self.depth))
         elif pooling == 'full_conv':
             self.pool = nn.ModuleList(
-                [DownsamplingBlock(chs[i], chs[i+1]) for i in range(self.num_step)])
+                [DownsamplingBlock(c, c, f_act=f_act) for c in chs])
 
     def forward(self, x):
         ftrs = []
-        for block in self.enc_blocks:
+        for block, pool_block in zip(self.enc_blocks, self.pool):
             x = block(x)
             ftrs.append(x)
-            x = self.pool(x)
+            x = pool_block(x)
         return ftrs
 
 
 class Decoder(nn.Module):
-    def __init__(self, chs=(1024, 512, 256, 128, 64)):
+    def __init__(self, chs=[1024, 512, 256, 128, 64], f_act='ReLU'):
         super().__init__()
-        self.num_step = len(chs) - 1
+        self.depth = len(chs) - 1
         self.upconvs = nn.ModuleList(
-            [UpsamplingBlock(chs[i], chs[i+1]) for i in range(self.num_step)])
+            [UpsamplingBlock(chs[i], chs[i+1], f_act=f_act) for i in range(self.depth)])
         self.dec_blocks = nn.ModuleList(
-            [Block(chs[i], chs[i+1]) for i in range(self.num_step)])
+            [Block(chs[i], chs[i+1], f_act=f_act) for i in range(self.depth)])
 
     def forward(self, x, encoder_features):
-        for i in range(self.num_step):
+        for i in range(self.depth):
             x = self.upconvs[i](x)
             enc_ftrs = encoder_features[i]
             x = torch.cat([x, enc_ftrs], dim=1)
@@ -102,12 +106,15 @@ class Decoder(nn.Module):
 
 
 class UNet3D(nn.Module):
-    def __init__(self, in_channels, enc_chs=(64, 128, 256, 512, 1024), pooling_type='full_conv'):
+    def __init__(self, in_channels, **kwargs):
         super().__init__()
         # decoding channels dims are the same as encoding channels but inverted
+        enc_chs = kwargs['g_filters']
+        pooling_type = kwargs['g_pooling_type']
+        activation = kwargs['g_activation']
         dec_chs = enc_chs[::-1]
-        self.encoder = Encoder(in_channels, enc_chs, pooling_type)
-        self.decoder = Decoder(dec_chs)
+        self.encoder = Encoder(in_channels, enc_chs, pooling_type, activation)
+        self.decoder = Decoder(dec_chs, activation)
         self.head = nn.Conv3d(
             in_channels=dec_chs[-1], out_channels=1, kernel_size=3, padding=1, padding_mode='replicate')
 
@@ -120,7 +127,7 @@ class UNet3D(nn.Module):
 
 class AEFlatpseudo2D(nn.Module):
 
-    def __init__(self, in_channels=1):
+    def __init__(self, in_channels=1, **kwargs):
         super().__init__()
 
         self.first = nn.Sequential(nn.Conv3d(in_channels, 32, kernel_size=3, padding=1, padding_mode='replicate'),
@@ -204,17 +211,18 @@ class Upsample(nn.Module):
 
 
 class Res3DUnet(nn.Module):
-    def __init__(self, channel, filters=[64, 128, 256, 512], do_sigmoid=False):
+    def __init__(self, in_channels, do_sigmoid=False, **kwargs):
         super(Res3DUnet, self).__init__()
 
+        filters = kwargs['g_filters']
         self.input_layer = nn.Sequential(
-            nn.Conv3d(channel, filters[0], kernel_size=3, padding=1),
+            nn.Conv3d(in_channels, filters[0], kernel_size=3, padding=1),
             nn.BatchNorm3d(filters[0]),
             nn.ReLU(),
             nn.Conv3d(filters[0], filters[0], kernel_size=3, padding=1),
         )
         self.input_skip = nn.Sequential(
-            nn.Conv3d(channel, filters[0], kernel_size=3, padding=1)
+            nn.Conv3d(in_channels, filters[0], kernel_size=3, padding=1)
         )
 
         self.residual_conv_1 = ResidualConv(filters[0], filters[1], 2, 1)

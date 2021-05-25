@@ -3,7 +3,6 @@ import torch
 import torch.nn as nn
 import pytorch_lightning as pl
 import rhtorch
-from rhtorch.models import discriminators, autoencoders
 import torchmetrics as tm
 import math
 import pkgutil
@@ -52,7 +51,7 @@ class LightningAE(pl.LightningModule):
 
         # generator
         self.generator = recursive_find_python_class(
-            hparams['generator'])(self.in_channels)
+            hparams['generator'])(self.in_channels, **hparams)
         self.g_optimizer = getattr(torch.optim, hparams['g_optimizer'])
         self.lr = hparams['g_lr']
         self.g_loss_train = getattr(tm, hparams['g_loss'])()  # MAE
