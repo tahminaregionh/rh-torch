@@ -2,63 +2,34 @@
 import torch
 import torch.nn as nn
 import pytorch_lightning as pl
-import rhtorch
 import torchmetrics as tm
 import math
-import pkgutil
-import os, sys
-import importlib
-
-def recursive_find_python_class( name, folder=None, current_module="rhtorch.models" ):
-    
-    # Set default search path to root modules
-    if folder is None:
-        folder = [ os.path.join( rhtorch.__path__[0], 'models') ]
-        
-    tr = None
-    for importer, modname, ispkg in pkgutil.iter_modules( folder ):
-        if not ispkg:
-            m = importlib.import_module( current_module + '.' + modname )
-            if hasattr(m, name):
-                tr = getattr(m,name)
-                break
-            
-    if tr is None:
-        for importer, modname, ispkg in pkgutil.iter_modules( folder ):
-            if ispkg: 
-                next_current_module = current_module + '.' + modname
-                tr = recursive_find_python_class( name, folder=[ os.path.join( folder[0], modname ) ], current_module=next_current_module )
-                
-            if tr is not None:
-                break
-    
-    if tr is None:
-        sys.exit(f"Could not find module {name}")
-    
-    return tr
+from rhtorch.utilities.modules import recursive_find_python_class 
 
 class LightningAE(pl.LightningModule):
     def __init__(self, hparams, in_shape=(2, 128, 128, 128)):
         super().__init__()
         self.hparams = hparams
-        self.in_shape = in_shape    # (self.img_rows, self.img_cols, self.channels_input)
+        # (self.img_rows, self.img_cols, self.channels_input)
+        self.in_shape = in_shape
         self.in_channels, self.dimx, self.dimy, self.dimz = self.in_shape
-        
+
         # generator
-        self.generator = recursive_find_python_class(hparams['generator'])(self.in_channels)
+        self.generator = recursive_find_python_class(
+            hparams['generator'])(self.in_channels, **hparams)
         self.g_optimizer = getattr(torch.optim, hparams['g_optimizer'])
         self.lr = hparams['g_lr']
         self.g_loss_train = getattr(tm, hparams['g_loss'])()  # MAE
         self.g_loss_val = getattr(tm, hparams['g_loss'])()  # MAE
         self.g_params = self.generator.parameters()
-        
+
         # additional losses
         self.mse_loss = tm.MeanSquaredError()
 
     def forward(self, image):
         """ image.size: (Batch size, Color channels, Depth, Height, Width) """
         return self.generator(image)
-    
+
     def training_step(self, batch, batch_idx):
         # training_step defined the train loop. It is independent of forward
         x, y = batch
@@ -68,7 +39,7 @@ class LightningAE(pl.LightningModule):
         self.log('train_loss', loss, sync_dist=True)
         # other losses to log only
         self.log('train_mse', self.mse_loss(y_hat, y), sync_dist=True)
-        
+
         return loss
 
     def validation_step(self, val_batch, batch_idx):
@@ -79,25 +50,29 @@ class LightningAE(pl.LightningModule):
         self.log('val_mse', self.mse_loss(y_hat, y), sync_dist=True)
 
         return loss
-        
+
     def configure_optimizers(self):
         g_optimizer = self.g_optimizer(self.g_params, lr=self.lr)
-        
+
         if 'lr_scheduler' not in self.hparams:
             return g_optimizer
         else:
             print("LR_SCHEDULER:", self.hparams['lr_scheduler'])
             if self.hparams['lr_scheduler'] == 'polynomial_0.995':
-                lambda1 = lambda epoch: 0.995 ** epoch
-                scheduler = torch.optim.lr_scheduler.LambdaLR(g_optimizer, lr_lambda=lambda1)
+                def lambda1(epoch): return 0.995 ** epoch
+                scheduler = torch.optim.lr_scheduler.LambdaLR(
+                    g_optimizer, lr_lambda=lambda1)
             elif self.hparams['lr_scheduler'] == 'step_decay_0.8_25':
                 drop = 0.8
                 epochs_drop = 25.0
-                lambda1 = lambda epoch: math.pow(drop, math.floor((1+epoch)/epochs_drop))
-                scheduler = torch.optim.lr_scheduler.LambdaLR(g_optimizer, lr_lambda=lambda1)
+                def lambda1(epoch): return math.pow(
+                    drop, math.floor((1+epoch)/epochs_drop))
+                scheduler = torch.optim.lr_scheduler.LambdaLR(
+                    g_optimizer, lr_lambda=lambda1)
             elif self.hparams['lr_scheduler'] == 'exponential_decay_0.01':
-                lambda1 = lambda epoch: math.exp(-0.01*epoch)
-                scheduler = torch.optim.lr_scheduler.LambdaLR(g_optimizer, lr_lambda=lambda1)
+                def lambda1(epoch): return math.exp(-0.01*epoch)
+                scheduler = torch.optim.lr_scheduler.LambdaLR(
+                    g_optimizer, lr_lambda=lambda1)
             else:
                 print("MISSING SCHEDULER")
                 exit(-1)
@@ -106,10 +81,10 @@ class LightningAE(pl.LightningModule):
                 'name': self.hparams['lr_scheduler']
             }
             return [g_optimizer], [lr_scheduler]
-    
-    
+
+
 class LightningPix2Pix(LightningAE):
-    
+
     def __init__(self, hparams, in_shape=(2, 128, 128, 128)):
         super().__init__(hparams, in_shape)
 
@@ -118,24 +93,28 @@ class LightningPix2Pix(LightningAE):
         patchy = int(self.dimy / 2**4)
         patchz = int(self.dimz / 2**4)
         self.disc_patch = (1, patchx, patchy, patchz)
-        
+
         # discriminator
-        self.discriminator = recursive_find_python_class(hparams['discriminator'])(self.in_channels)
+        self.discriminator = recursive_find_python_class(
+            hparams['discriminator'])(self.in_channels)
         self.d_optimizer = getattr(torch.optim, self.hparams['d_optimizer'])
         self.d_lr = self.hparams['d_lr']
-        self.d_loss = getattr(nn, self.hparams['d_loss'])()             # BCE with logits
+        # BCE with logits
+        self.d_loss = getattr(nn, self.hparams['d_loss'])()
         self.d_params = self.discriminator.parameters()
         self.LAMBDA = 100
 
     def training_step(self, batch, batch_idx, optimizer_idx):
-        # training_step defines the train loop. It is independent of forward
+        # training_step defines the training loop. It is independent of forward
         inp, tar = batch
         fake_imgs = self.generator(inp)
         bs = inp.size()[0]
 
         # (bs, 1, 16/16=1, 128/16=8, 128/16=8)    # 16=2**4 for 4x down conv of the patch
-        valid = torch.ones((bs,) + self.disc_patch, device=self.device, requires_grad=False) 
-        fake = torch.zeros((bs,) + self.disc_patch, device=self.device, requires_grad=False)
+        valid = torch.ones((bs,) + self.disc_patch,
+                           device=self.device, requires_grad=False)
+        fake = torch.zeros((bs,) + self.disc_patch,
+                           device=self.device, requires_grad=False)
 
         # losses to log only (not for training)-> raise problems
         # self.log('train_accuracy', self.accuracy(fake_imgs, tar))
@@ -153,17 +132,18 @@ class LightningPix2Pix(LightningAE):
             # mean absolute error
             g_loss = self.g_loss_train(fake_imgs, tar)
             gan_loss = d_loss + (self.LAMBDA * g_loss)
-            self.log('train_loss', g_loss, sync_dist=True)        # implied for generator
+            # implied for generator
+            self.log('train_loss', g_loss, sync_dist=True)
             self.log('train_gan_loss', gan_loss, sync_dist=True)
-            
+
             return gan_loss
-        
+
         #  Train Discriminator
         if optimizer_idx == 1:
             # reset calculation of gradient to True
             for param in self.discriminator.parameters():
                 param.requires_grad = True
-            
+
             # train discriminator with real images
             real_patch = self.discriminator(inp, tar)
             d_loss_real = self.d_loss(real_patch, valid)
@@ -173,7 +153,7 @@ class LightningPix2Pix(LightningAE):
             # combine the losses equally
             d_loss = 0.5 * torch.add(d_loss_real, d_loss_fake)
             self.log('train_d_loss', d_loss, sync_dist=True)
-            
+
             return d_loss
 
     def configure_optimizers(self):

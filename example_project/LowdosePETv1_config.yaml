@@ -1,6 +1,8 @@
-# main config to train models
+# main config to train your model
+# check default.config for all available options
+
 project_name: YOUR_PROJECT_NAME       # Used for WANDB
-version_name: RESUNETv1               # Make run unique by changing this counter
+version_name: UNETv1               # Make run unique by changing this counter
 
 # main model:
 precision: 32
@@ -10,19 +12,14 @@ acc_grad_batches: 4
 module: LightningAE
 
 # generator
-generator: Res3DUnet
+generator: UNet3D
+g_pooling_type: full_conv
+g_filters: [64, 128, 256, 512, 1024]
 # g_activation: ReLU
 g_optimizer: Adam
 g_lr: 1e-4
 #lr_scheduler: 'exponential_decay_0.01'
 g_loss: MeanAbsoluteError
-# pretrained_generator: absolute path to .pt or .ckpt
-
-# discriminator - will be used if model is GAN
-# discriminator: ConvNetDiscriminator
-# d_optimizer: Adam
-# d_lr: 2e-4
-# d_loss: BCEWithLogitsLoss
 
 # data:
 data_split_pkl: Data/data_5fold.pickle       # inside data folder .json or .pickle
@@ -30,9 +27,9 @@ data_generator: CustomDataLoader
 data_folder: Data/data_noblur_25_64x64x64    # inside project dir
 pet_normalization_constant: 32676
 augment: True
-data_shape: [64,64,64]
+data_shape: [128, 128, 128]
 color_channels_in: 1
-repeat_patient_list: 500
+repeat_patient_list: 100
 
 # for plotting during training
 callback_image2image: 'ImagePredictionLogger'
