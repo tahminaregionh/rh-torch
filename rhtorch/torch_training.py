@@ -38,6 +38,12 @@ def main():
 
     # load configs from file + additional info from args
     user_configs = UserConfig(project_dir, args)
+    # setting up test
+    if is_test:
+        print('This is a test run on 10/2 train/test patients and 5 epochs.')
+        user_configs.hparams['epoch'] = 5
+        user_configs.create_model_name() # Update name using newly set epoch
+        os.environ['WANDB_MODE'] = 'dryrun'
     configs = user_configs.hparams
 
     # Set local data_generator
@@ -45,12 +51,6 @@ def main():
     import data_generator
     loader_params = {'batch_size': configs['batch_size'], 'num_workers': 4}
     data_gen = getattr(data_generator, configs['data_generator'])
-
-    # setting up test
-    if is_test:
-        print('This is a test run on 10/2 train/test patients and 5 epochs.')
-        configs['epoch'] = 5
-        os.environ['WANDB_MODE'] = 'dryrun'
 
     # training data
     augment = False if 'augment' not in configs else configs['augment']
