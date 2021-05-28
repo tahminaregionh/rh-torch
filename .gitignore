@@ -5,3 +5,4 @@ rhtorch.egg-info
 .vscode/
 rhtorch/models/dev/*
 !rhtorch/models/dev/__init__.py
+my.stdout
