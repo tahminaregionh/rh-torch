@@ -7,7 +7,7 @@ import socket
 
 
 class UserConfig:
-    def __init__(self, rootdir, arguments=None):
+    def __init__(self, rootdir, arguments=None, overwrite=True):
         self.rootdir = rootdir
         self.config_file = self.is_path(arguments.config)
         self.args = arguments
@@ -27,9 +27,11 @@ class UserConfig:
         # sanity check on data_folder provided by user
         self.data_path = self.is_path(self.hparams['data_folder'])
 
-        # make model name
-        self.fill_additional_info()
-        self.create_model_name()
+        if overwrite or not 'build_date' in self.hparams.keys():
+            self.fill_additional_info()
+        if overwrite or not 'model_name' in self.hparams.keys():
+            # make model name
+            self.create_model_name()
 
     def is_path(self, path):
         # check for path - assuming absolute path was given
