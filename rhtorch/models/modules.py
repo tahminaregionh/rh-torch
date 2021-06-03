@@ -36,9 +36,12 @@ class LightningAE(pl.LightningModule):
         y_hat = self.forward(x)
         # main loss used for optimization
         loss = self.g_loss_train(y_hat, y)
-        self.log('train_loss', loss, sync_dist=True)
+        # for single GPU training, sync_dist should be False
+        # however we can drop that key altogether when using torchmetrics
+        # see: https://pytorch-lightning.readthedocs.io/en/stable/advanced/multi_gpu.html#synchronize-validation-and-test-logging
+        self.log('train_loss', loss) #, sync_dist=True)
         # other losses to log only
-        self.log('train_mse', self.mse_loss(y_hat, y), sync_dist=True)
+        self.log('train_mse', self.mse_loss(y_hat, y)) #, sync_dist=True)
 
         return loss
 
@@ -46,8 +49,8 @@ class LightningAE(pl.LightningModule):
         x, y = val_batch
         y_hat = self.forward(x)
         loss = self.g_loss_val(y_hat, y)
-        self.log('val_loss', loss, sync_dist=True)
-        self.log('val_mse', self.mse_loss(y_hat, y), sync_dist=True)
+        self.log('val_loss', loss) # , sync_dist=True)
+        self.log('val_mse', self.mse_loss(y_hat, y)) #, sync_dist=True)
 
         return loss
 

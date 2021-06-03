@@ -31,7 +31,20 @@ def main():
                         type=int, default=0)
     parser.add_argument("-t", "--test", help="Test run for 1 patient",
                         action="store_true", default=False)
-
+    # args for wandb sweep
+    parser.add_argument("-lr", "--learningrate",
+                        help="Learning rate of generator",
+                        type=float, default=0)
+    parser.add_argument("-opt", "--optimizer",
+                        help="Optimizer for the generator",
+                        type=str, default='')
+    parser.add_argument("-act", "--activation",
+                        help="Activation used throughout the generator architecture",
+                        type=str, default='')
+    parser.add_argument("-pool", "--poolingtype",
+                        help="Down sampling layer type for UNet3D generator",
+                        type=str, default='')
+    
     args = parser.parse_args()
     project_dir = Path(args.input)
     is_test = args.test

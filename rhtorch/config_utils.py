@@ -20,6 +20,9 @@ class UserConfig:
         # load user config file
         with open(self.config_file) as cf:
             self.hparams = yaml.load(cf, Loader=yaml.RoundTripLoader)
+            
+        # finally overwrite any parameters passed in throuch CLI
+        self.overwrite_hparams()
 
         # merge the two dicts
         self.merge_dicts()
@@ -27,9 +30,9 @@ class UserConfig:
         # sanity check on data_folder provided by user
         self.data_path = self.is_path(self.hparams['data_folder'])
 
-        if overwrite or not 'build_date' in self.hparams.keys():
+        if overwrite or not 'build_date' in self.hparams:
             self.fill_additional_info()
-        if overwrite or not 'model_name' in self.hparams.keys():
+        if overwrite or not 'model_name' in self.hparams:
             # make model name
             self.create_model_name()
 
@@ -52,6 +55,17 @@ class UserConfig:
             # copy from default if value is not None/0/False and key not already in user config
             if value and key not in self.hparams:
                 self.hparams[key] = value
+                
+    def overwrite_hparams(self):
+        if self.args.learningrate:
+            self.hparams['g_lr'] = self.args.learningrate
+        if self.args.optimizer:
+            self.hparams['g_optimizer'] = self.args.optimizer
+        if self.args.activation:
+            self.hparams['g_activation'] = self.args.activation
+        if self.args.poolingtype:
+            self.hparams['g_pooling_type'] = self.args.poolingtype
+            
 
     def fill_additional_info(self):
         # additional info from args and miscellaneous to save in config
