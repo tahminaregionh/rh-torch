@@ -3,7 +3,7 @@ import wandb
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-
+import torchio as tio
 
 def plot_inline(d1, d2, d3, color_channel_axis=0, vmin=None, vmax=None):
     """
@@ -52,7 +52,11 @@ def plot_inline(d1, d2, d3, color_channel_axis=0, vmin=None, vmax=None):
 class ImagePredictionLogger(Callback):
     def __init__(self, val_dataloader, config=None):
         super().__init__()
-        self.X, self.y = next(iter(val_dataloader))
+        # self.X, self.y = next(iter(val_dataloader))
+        batch = next(iter(val_dataloader))
+        X1, X2 = batch['input0'][tio.DATA], batch['input1'][tio.DATA]
+        self.X = torch.cat((X1, X2), axis=1)
+        self.y = batch['target0'][tio.DATA]
         
         # TODO: Read config file to parse vmin, vmax or e.g. custom titles
         

@@ -4,13 +4,13 @@ import torch
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
-from torch.utils.data import DataLoader
+# from torch.utils.data import DataLoader
 import os
 import sys
 from pathlib import Path
 
 # library package imports
-from rhtorch.models import modules
+# from rhtorch.models import modules
 from rhtorch.callbacks import plotting
 from rhtorch.config_utils import UserConfig
 from rhtorch.utilities.modules import recursive_find_python_class
@@ -61,24 +61,35 @@ def main():
 
     # Set local data_generator
     sys.path.insert(1, args.input)
-    import data_generator
-    loader_params = {'batch_size': configs['batch_size'], 'num_workers': 4}
-    data_gen = getattr(data_generator, configs['data_generator'])
+    # import data_generator - OLD VERSION
+    # loader_params = {'batch_size': configs['batch_size'], 'num_workers': 4}
+    # data_gen = getattr(data_generator, configs['data_generator'])
 
-    # training data
-    augment = False if 'augment' not in configs else configs['augment']
-    if augment:
-        print("Augmenting data")
-    data_train = data_gen('train', conf=configs, augment=augment, test=is_test)
-    train_dataloader = DataLoader(data_train, shuffle=True, **loader_params)
+    # # training data
+    # augment = False if 'augment' not in configs else configs['augment']
+    # if augment:
+    #     print("Augmenting data")
+    # data_train = data_gen('train', conf=configs, augment=augment, test=is_test)
+    # train_dataloader = DataLoader(data_train, shuffle=True, **loader_params)
 
-    # validation data
-    data_valid = data_gen('valid', conf=configs, augment=False, test=is_test)
-    valid_dataloader = DataLoader(data_valid, **loader_params)
-
+    # # validation data
+    # data_valid = data_gen('valid', conf=configs, augment=False, test=is_test)
+    # valid_dataloader = DataLoader(data_valid, **loader_params)
+    
+    ## NEW VERSION WITH DATA MODULE
+    from data_generator_new import GenericDataModule
+    data_module = GenericDataModule(configs)
+    data_module.prepare_data()
+    
+    # data_module.prepare_test_data()
+    data_module.setup()
+    print('Done preparing the data.')
     # define lightning module
-    shape_in = data_train.data_shape_in
-    module = recursive_find_python_class( configs['module'] )
+    # shape_in = data_train.data_shape_in
+    shape_in = configs['patch_size']
+    color_channels = len(configs['input_files'])
+    shape_in.insert(0, color_channels)
+    module = recursive_find_python_class(configs['module'])
     model = module(configs, shape_in) # Should also be changed to custom arguments (**configs)
 
     # transfer learning setup
@@ -114,15 +125,22 @@ def main():
                                save_dir=project_dir,
                                config=configs)
 
-    # callbacks
+    # callbacks - OLD
+    # callbacks = []
+    # if 'callback_image2image' in configs:
+    #     data_plot = data_gen('valid', conf=configs,
+    #                          augment=False, test=is_test)
+    #     plot_dataloader = DataLoader(data_plot, **loader_params)
+    #     callback_image2image = getattr(
+    #         plotting, configs['callback_image2image'])
+    #     callbacks.append(callback_image2image(plot_dataloader))
+        
+    # callbacks - NEW
     callbacks = []
     if 'callback_image2image' in configs:
-        data_plot = data_gen('valid', conf=configs,
-                             augment=False, test=is_test)
-        plot_dataloader = DataLoader(data_plot, **loader_params)
         callback_image2image = getattr(
             plotting, configs['callback_image2image'])
-        callbacks.append(callback_image2image(plot_dataloader))
+        callbacks.append(callback_image2image(data_module.val_dataloader()))
 
     # checkpointing
     model_path = project_dir.joinpath(
@@ -137,7 +155,7 @@ def main():
     checkpoint_callback = ModelCheckpoint(
         monitor='val_loss',
         dirpath=checkpoint_dir,
-        filename=f'Checkpoint_min_val_loss',
+        filename='Checkpoint_min_val_loss',
         save_top_k=3,       # saves 3 best models based on monitored value
         save_last=True,     # additionally overwrites a file last.ckpt after each epoch
         period=2,
@@ -163,8 +181,9 @@ def main():
                          profiler="simple")
 
     # actual training
-    trainer.fit(model, train_dataloader, valid_dataloader)
-
+    #trainer.fit(model, train_dataloader, valid_dataloader)
+    trainer.fit(model, datamodule=data_module)
+    
     # add useful info to saved configs
     user_configs.hparams['best_model'] = checkpoint_callback.best_model_path
 
