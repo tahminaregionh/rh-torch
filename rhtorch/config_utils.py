@@ -7,20 +7,26 @@ import socket
 
 
 class UserConfig:
-    def __init__(self, rootdir, arguments=None, overwrite=True):
+    def __init__(self, rootdir, arguments=None, mode='train', overwrite=True):
         self.rootdir = rootdir
         self.config_file = self.is_path(arguments.config)
         self.args = arguments
+        self.overwrite = overwrite
 
+        # load user config file
+        with open(self.config_file) as cf:
+            self.hparams = yaml.load(cf, Loader=yaml.RoundTripLoader)
+
+        # for inference, only load the config file
+        if mode == 'train':
+            self.training_setup()
+
+    def training_setup(self):
         # load default configs
         default_config_file = Path(__file__).parent.joinpath('default.config')
         with open(default_config_file) as dcf:
             self.default_params = yaml.load(dcf, Loader=yaml.Loader)
 
-        # load user config file
-        with open(self.config_file) as cf:
-            self.hparams = yaml.load(cf, Loader=yaml.RoundTripLoader)
-            
         # finally overwrite any parameters passed in throuch CLI
         self.overwrite_hparams()
 
@@ -30,9 +36,9 @@ class UserConfig:
         # sanity check on data_folder provided by user
         self.data_path = self.is_path(self.hparams['data_folder'])
 
-        if overwrite or not 'build_date' in self.hparams:
+        if self.overwrite or not 'build_date' in self.hparams:
             self.fill_additional_info()
-        if overwrite or not 'model_name' in self.hparams:
+        if self.overwrite or not 'model_name' in self.hparams:
             # make model name
             self.create_model_name()
 
@@ -55,7 +61,7 @@ class UserConfig:
             # copy from default if value is not None/0/False and key not already in user config
             if value and key not in self.hparams:
                 self.hparams[key] = value
-                
+
     def overwrite_hparams(self):
         if self.args.learningrate:
             self.hparams['g_lr'] = self.args.learningrate
@@ -65,7 +71,6 @@ class UserConfig:
             self.hparams['g_activation'] = self.args.activation
         if self.args.poolingtype:
             self.hparams['g_pooling_type'] = self.args.poolingtype
-            
 
     def fill_additional_info(self):
         # additional info from args and miscellaneous to save in config
