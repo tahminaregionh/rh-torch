@@ -26,7 +26,7 @@ class UserConfig:
         with open(default_config_file) as dcf:
             self.default_params = yaml.load(dcf, Loader=yaml.Loader)
 
-        # finally overwrite any parameters passed in throuch CLI
+        # overwrite any parameters passed in throuch CLI
         self.overwrite_hparams()
 
         # merge the two dicts
