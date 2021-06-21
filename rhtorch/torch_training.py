@@ -31,7 +31,8 @@ def main():
                         type=int, default=0)
     parser.add_argument("-t", "--test", help="Test run for 1 patient",
                         action="store_true", default=False)
-    # args for wandb sweep
+    
+    # args for wandb sweep - I don't know if this is the right way to go
     parser.add_argument("-lr", "--learningrate",
                         help="Learning rate of generator",
                         type=float, default=0)
@@ -58,6 +59,11 @@ def main():
         user_configs.create_model_name() # Update name using newly set epoch
         os.environ['WANDB_MODE'] = 'dryrun'
     configs = user_configs.hparams
+    
+    print("##### USER CONFIGS #######\n")
+    for k, v in configs.items():
+        print(k.ljust(40), v)
+    print("\n##########################")
 
     # Set local data_generator
     sys.path.insert(1, args.input)

@@ -11,7 +11,8 @@ class UserConfig:
         self.rootdir = rootdir
         self.config_file = self.is_path(arguments.config)
         self.args = arguments
-
+        self.overwrite = overwrite
+        
         # load user config file
         with open(self.config_file) as cf:
             self.hparams = yaml.load(cf, Loader=yaml.RoundTripLoader)
