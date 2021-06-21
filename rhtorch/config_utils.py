@@ -12,7 +12,7 @@ class UserConfig:
         self.config_file = self.is_path(arguments.config)
         self.args = arguments
         self.overwrite = overwrite
-
+        
         # load user config file
         with open(self.config_file) as cf:
             self.hparams = yaml.load(cf, Loader=yaml.RoundTripLoader)
@@ -27,8 +27,8 @@ class UserConfig:
         with open(default_config_file) as dcf:
             self.default_params = yaml.load(dcf, Loader=yaml.Loader)
 
-        # finally overwrite any parameters passed in throuch CLI
-        self.overwrite_hparams()
+        # overwrite any parameters passed in throuch CLI
+        self.cli_hparams()
 
         # merge the two dicts
         self.merge_dicts()
@@ -61,8 +61,9 @@ class UserConfig:
             # copy from default if value is not None/0/False and key not already in user config
             if value and key not in self.hparams:
                 self.hparams[key] = value
-
-    def overwrite_hparams(self):
+                
+    def cli_hparams(self):
+        # I don't know if that is the right way to go (adding every key one by one)
         if self.args.learningrate:
             self.hparams['g_lr'] = self.args.learningrate
         if self.args.optimizer:
