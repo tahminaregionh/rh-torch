@@ -27,7 +27,7 @@ class UserConfig:
             self.default_params = yaml.load(dcf, Loader=yaml.Loader)
 
         # overwrite any parameters passed in throuch CLI
-        self.overwrite_hparams()
+        self.cli_hparams()
 
         # merge the two dicts
         self.merge_dicts()
@@ -60,6 +60,17 @@ class UserConfig:
             # copy from default if value is not None/0/False and key not already in user config
             if value and key not in self.hparams:
                 self.hparams[key] = value
+                
+    def cli_hparams(self):
+        # I don't know if that is the right way to go (adding every key one by one)
+        if self.args.learningrate:
+            self.hparams['g_lr'] = self.args.learningrate
+        if self.args.optimizer:
+            self.hparams['g_optimizer'] = self.args.optimizer
+        if self.args.activation:
+            self.hparams['g_activation'] = self.args.activation
+        if self.args.poolingtype:
+            self.hparams['g_pooling_type'] = self.args.poolingtype
 
     def fill_additional_info(self):
         # additional info from args and miscellaneous to save in config
