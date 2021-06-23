@@ -8,6 +8,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 import os
 import sys
 from pathlib import Path
+import argparse
 
 # library package imports
 # from rhtorch.models import modules
@@ -15,9 +16,8 @@ from rhtorch.callbacks import plotting
 from rhtorch.config_utils import UserConfig
 from rhtorch.utilities.modules import recursive_find_python_class
 
-def main():
-    import argparse
 
+def main():
     parser = argparse.ArgumentParser(
         description='Runs training on dataset in the input directory and config.yaml')
     parser.add_argument("-i", "--input",
@@ -45,62 +45,52 @@ def main():
     parser.add_argument("-pool", "--poolingtype",
                         help="Down sampling layer type for UNet3D generator",
                         type=str, default='')
-    
+
     args = parser.parse_args()
     project_dir = Path(args.input)
     is_test = args.test
 
     # load configs from file + additional info from args
     user_configs = UserConfig(project_dir, args)
+
     # setting up test
     if is_test:
         print('This is a test run on 10/2 train/test patients and 5 epochs.')
         user_configs.hparams['epoch'] = 5
-        user_configs.create_model_name() # Update name using newly set epoch
+        user_configs.create_model_name()  # Update name using newly set epoch
         os.environ['WANDB_MODE'] = 'dryrun'
     configs = user_configs.hparams
+
+    # Set local data_generator
+    sys.path.insert(1, args.input)
+    import data_generator  # revert to data_generator
+    data_gen = getattr(data_generator, configs['data_generator'])
+    data_module = data_gen(configs)
+    data_module.prepare_train_data()
+    data_module.setup()
+    print('Done preparing the data.')
+
+    # Augmentation message
+    if 'augment' in configs and configs['augment']:
+        print("Augmenting data")
+
+    color_channels = len(configs['input_files'])
+    shape_in = [color_channels, *configs['patch_size']]
+    user_configs.hparams['color_channels_in'] = color_channels
+    user_configs.hparams['data_shape_in'] = shape_in
     
     print("##### USER CONFIGS #######\n")
     for k, v in configs.items():
         print(k.ljust(40), v)
     print("\n##########################")
-
-    # Set local data_generator
-    sys.path.insert(1, args.input)
-    # import data_generator - OLD VERSION
-    # loader_params = {'batch_size': configs['batch_size'], 'num_workers': 4}
-    # data_gen = getattr(data_generator, configs['data_generator'])
-
-    # # training data
-    # augment = False if 'augment' not in configs else configs['augment']
-    # if augment:
-    #     print("Augmenting data")
-    # data_train = data_gen('train', conf=configs, augment=augment, test=is_test)
-    # train_dataloader = DataLoader(data_train, shuffle=True, **loader_params)
-
-    # # validation data
-    # data_valid = data_gen('valid', conf=configs, augment=False, test=is_test)
-    # valid_dataloader = DataLoader(data_valid, **loader_params)
     
-    ## NEW VERSION WITH DATA MODULE
-    from data_generator_new import GenericDataModule
-    data_module = GenericDataModule(configs)
-    data_module.prepare_data()
-    
-    # data_module.prepare_test_data()
-    data_module.setup()
-    print('Done preparing the data.')
-    # define lightning module
-    # shape_in = data_train.data_shape_in
-    shape_in = configs['patch_size']
-    color_channels = len(configs['input_files'])
-    shape_in.insert(0, color_channels)
     module = recursive_find_python_class(configs['module'])
-    model = module(configs, shape_in) # Should also be changed to custom arguments (**configs)
+    # Should also be changed to custom arguments (**configs)
+    model = module(configs, shape_in)
 
     # transfer learning setup
     if 'pretrained generator' in configs and configs['pretrained_generator']:
-        message = "Setting up transfer learning"
+        tl_message = "Setting up transfer learning"
         pretrained_model_path = Path(configs['pretrained_generator'])
         if pretrained_model_path.exists():
             if pretrained_model_path.name.endswith(".ckpt"):
@@ -119,10 +109,10 @@ def main():
 
         # This should be more generic. What if we are to only freeze some of the layers?
         if 'freeze_encoder' in configs and configs['freeze_encoder']:
-            message += "with frozen encoder."
+            tl_message += "with frozen encoder."
             model.encoder.freeze()
 
-        print(message)
+        print(tl_message)
 
     # wandb dashboard setup
     wandb_logger = WandbLogger(name=configs['version_name'],
@@ -131,22 +121,12 @@ def main():
                                save_dir=project_dir,
                                config=configs)
 
-    # callbacks - OLD
-    # callbacks = []
-    # if 'callback_image2image' in configs:
-    #     data_plot = data_gen('valid', conf=configs,
-    #                          augment=False, test=is_test)
-    #     plot_dataloader = DataLoader(data_plot, **loader_params)
-    #     callback_image2image = getattr(
-    #         plotting, configs['callback_image2image'])
-    #     callbacks.append(callback_image2image(plot_dataloader))
-        
-    # callbacks - NEW
+    # callbacks
     callbacks = []
-    if 'callback_image2image' in configs:
-        callback_image2image = getattr(
-            plotting, configs['callback_image2image'])
-        callbacks.append(callback_image2image(data_module.val_dataloader()))
+    if 'plotting_callback' in configs:
+        plot_configs = configs['plotting_callback']
+        plotting_callback = getattr(plotting, plot_configs['class'])
+        callbacks.append(plotting_callback(data_module, configs))
 
     # checkpointing
     model_path = project_dir.joinpath(
@@ -187,10 +167,10 @@ def main():
                          profiler="simple")
 
     # actual training
-    #trainer.fit(model, train_dataloader, valid_dataloader)
     trainer.fit(model, datamodule=data_module)
-    
+
     # add useful info to saved configs
+    user_configs.hparams['model_dir'] = model_path
     user_configs.hparams['best_model'] = checkpoint_callback.best_model_path
 
     # save the model

@@ -4,8 +4,9 @@ import torch.nn as nn
 import pytorch_lightning as pl
 import torchmetrics as tm
 import math
-from rhtorch.utilities.modules import recursive_find_python_class 
+from rhtorch.utilities.modules import recursive_find_python_class
 import torchio as tio
+
 
 class LightningAE(pl.LightningModule):
     def __init__(self, hparams, in_shape=(2, 128, 128, 128)):
@@ -30,18 +31,19 @@ class LightningAE(pl.LightningModule):
     def forward(self, image):
         """ image.size: (Batch size, Color channels, Depth, Height, Width) """
         return self.generator(image)
-    
+
     def prepare_batch(self, batch):
         # first input channel
         x = batch['input0'][tio.DATA]
         # other input channels if any
         for i in range(1, self.in_channels):
             x_i = batch[f'input{i}'][tio.DATA]
-            x = torch.cat((x, x_i), axis=1)  # axis=0 is batch_size, axis=1 is color_channel
+            # axis=0 is batch_size, axis=1 is color_channel
+            x = torch.cat((x, x_i), axis=1)
         # target channel
         y = batch['target0'][tio.DATA]
         return x, y
-    
+
     def training_step(self, batch, batch_idx):
         # training_step defined the train loop. It is independent of forward
         x, y = self.prepare_batch(batch)   # instead of x, y = batch
@@ -51,9 +53,9 @@ class LightningAE(pl.LightningModule):
         # for single GPU training, sync_dist should be False
         # however we can drop that key altogether when using torchmetrics
         # see: https://pytorch-lightning.readthedocs.io/en/stable/advanced/multi_gpu.html#synchronize-validation-and-test-logging
-        self.log('train_loss', loss) #, sync_dist=True)
+        self.log('train_loss', loss)  # , sync_dist=True)
         # other losses to log only
-        self.log('train_mse', self.mse_loss(y_hat, y)) #, sync_dist=True)
+        self.log('train_mse', self.mse_loss(y_hat, y))  # , sync_dist=True)
 
         return loss
 
@@ -61,8 +63,8 @@ class LightningAE(pl.LightningModule):
         x, y = self.prepare_batch(val_batch)    # instead of x, y = val_batch
         y_hat = self.forward(x)
         loss = self.g_loss_val(y_hat, y)
-        self.log('val_loss', loss) # , sync_dist=True)
-        self.log('val_mse', self.mse_loss(y_hat, y)) #, sync_dist=True)
+        self.log('val_loss', loss)  # , sync_dist=True)
+        self.log('val_mse', self.mse_loss(y_hat, y))  # , sync_dist=True)
 
         return loss
 

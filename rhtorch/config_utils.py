@@ -4,15 +4,16 @@ from pathlib import Path
 import torch
 from rhtorch.version import __version__
 import socket
+import os
 
 
 class UserConfig:
-    def __init__(self, rootdir, arguments=None, mode='train', overwrite=True):
+    def __init__(self, rootdir=os.getcwd(), arguments=None, mode='train', overwrite=True):
         self.rootdir = rootdir
         self.config_file = self.is_path(arguments.config)
         self.args = arguments
         self.overwrite = overwrite
-        
+
         # load user config file
         with open(self.config_file) as cf:
             self.hparams = yaml.load(cf, Loader=yaml.RoundTripLoader)
@@ -61,7 +62,7 @@ class UserConfig:
             # copy from default if value is not None/0/False and key not already in user config
             if value and key not in self.hparams:
                 self.hparams[key] = value
-                
+
     def cli_hparams(self):
         # I don't know if that is the right way to go (adding every key one by one)
         if self.args.learningrate:
