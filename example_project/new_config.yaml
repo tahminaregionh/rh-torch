@@ -1,0 +1,58 @@
+# main config to train models
+project_name: LowdosePET-PiBVision          # Used for WANDB
+version_name: UNET_test_v23                 # Make run unique by changing this counter
+
+# main model:
+precision: 32
+epoch: 400
+batch_size: 1
+acc_grad_batches: 1
+module: LightningAE
+
+# generator
+generator: UNet3D
+g_pooling_type: max_pool
+g_filters: [64, 128, 256, 512, 1024]
+g_activation: SiLU
+g_optimizer: Adam
+g_lr: 1e-4
+# lr_scheduler: exponential_decay_0.01
+g_loss: MeanAbsoluteError
+
+# transfer learning
+# pretrained_generator: /homes/raphael/Projects/LowdosePET/PiBVision/models/LightningAE_PETCTtoPET_UNet3DMaxPool_lr1e-04_mae_bz2_transverse16_k0_e100_acc1_skull_strip_v1
+# freeze_encoder: False
+
+# discriminator - will be used if model is GAN
+# discriminator: ConvNetDiscriminator
+# d_optimizer: Adam
+# d_lr: 2e-4
+# d_loss: BCEWithLogitsLoss
+
+# data:
+data_split_pkl: PiBVision_train_test_split_6_fold.json    # inside data folder
+data_generator: GenericDataModule
+data_folder: data_anonymized_complete_resampled           # inside project dir
+pet_normalization_constant: 32676
+augment: True
+data_shape: [128, 128, 128]
+patch_size: [16, 128, 128]
+repeat_patient_list: 1
+
+# data files:
+input_files: 
+  name: ['pet_lowdose_bet.npy', 'ct.npy']
+  preprocess_step: ['pet_hard_normalization', 'ct_normalization']
+target_files:
+  name: ['pet_highdose_bet.npy']
+  preprocess_step: ['pet_hard_normalization']
+
+# for plotting during training
+plotting_callback:
+  class: Image2ImageLogger
+  viewing_axis: 1
+  vmin: null
+  vmax: null
+
+
+# model-specific info (self-generated) - do not write anything beyond here

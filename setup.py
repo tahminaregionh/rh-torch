@@ -4,9 +4,9 @@ from setuptools import setup, find_packages
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
-    
+
 setup(
-     name='rhtorch',  
+     name='rhtorch',
      version='0.0.1',
      author="Claes Ladefoged",
      author_email="claes.noehr.ladefoged@regionh.dk",
@@ -23,6 +23,7 @@ setup(
      install_requires=[
          'torch',
          'pytorch_lightning',
+         'torchio',
          'wandb',
          'ruamel.yaml'
     ],

@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 
+
 class Block(nn.Module):
     """ Double conv layer used as feature extractor in encoder/decoder"""
 
@@ -106,7 +107,8 @@ class UNet3D(nn.Module):
         super().__init__()
         # decoding channels dims are the same as encoding channels but inverted
         dec_chs = g_filters[::-1]
-        self.encoder = Encoder(in_channels, g_filters, g_pooling_type, g_activation)
+        self.encoder = Encoder(in_channels, g_filters,
+                               g_pooling_type, g_activation)
         self.decoder = Decoder(dec_chs, g_activation)
         self.head = nn.Conv3d(
             in_channels=dec_chs[-1], out_channels=1, kernel_size=3, padding=1, padding_mode='replicate')
@@ -117,9 +119,12 @@ class UNet3D(nn.Module):
         out = self.decoder(enc_ftrs[0], enc_ftrs[1:])
         return self.head(out)
 
+
 """
 UNet-like network that never uses striding, so no downsampling is performed.
 """
+
+
 class AEFlatpseudo2D(nn.Module):
 
     def __init__(self, in_channels=1, **kwargs):
@@ -182,8 +187,10 @@ class Res3DUnet(nn.Module):
             nn.Conv3d(in_channels, g_filters[0], kernel_size=3, padding=1)
         )
 
-        self.residual_conv_1 = self.ResidualConv(g_filters[0], g_filters[1], 2, 1)
-        self.residual_conv_2 = self.ResidualConv(g_filters[1], g_filters[2], 2, 1)
+        self.residual_conv_1 = self.ResidualConv(
+            g_filters[0], g_filters[1], 2, 1)
+        self.residual_conv_2 = self.ResidualConv(
+            g_filters[1], g_filters[2], 2, 1)
 
         self.bridge = self.ResidualConv(g_filters[2], g_filters[3], 2, 1)
 
@@ -191,7 +198,7 @@ class Res3DUnet(nn.Module):
         self.up_residual_conv1 = self.ResidualConv(
             g_filters[3] + g_filters[2], g_filters[2], 1, 1)
 
-        self.upsample_2 =self.Upsample(g_filters[2], g_filters[2], 2, 2)
+        self.upsample_2 = self.Upsample(g_filters[2], g_filters[2], 2, 2)
         self.up_residual_conv2 = self.ResidualConv(
             g_filters[2] + g_filters[1], g_filters[1], 1, 1)
 
@@ -260,7 +267,6 @@ class Res3DUnet(nn.Module):
 
             return self.conv_block(x) + self.conv_skip(x)
 
-
     class Upsample(nn.Module):
         def __init__(self, input_dim, output_dim, kernel, stride):
             super().__init__()
@@ -271,6 +277,7 @@ class Res3DUnet(nn.Module):
 
         def forward(self, x):
             return self.upsample(x)
+
 
 """ DEPENDENCIES """
 UNet3DFullConv = UNet3D

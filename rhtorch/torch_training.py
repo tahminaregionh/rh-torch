@@ -4,19 +4,19 @@ import torch
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
-from torch.utils.data import DataLoader
+# from torch.utils.data import DataLoader
 import os
 import sys
 from pathlib import Path
+import argparse
 
 # library package imports
 from rhtorch.callbacks import plotting
 from rhtorch.config_utils import UserConfig
 from rhtorch.utilities.modules import recursive_find_python_class
 
-def main():
-    import argparse
 
+def main():
     parser = argparse.ArgumentParser(
         description='Runs training on dataset in the input directory and config.yaml')
     parser.add_argument("-i", "--input",
@@ -51,11 +51,12 @@ def main():
 
     # load configs from file + additional info from args
     user_configs = UserConfig(project_dir, args)
+
     # setting up test
     if is_test:
         print('This is a test run on 10/2 train/test patients and 5 epochs.')
         user_configs.hparams['epoch'] = 5
-        user_configs.create_model_name() # Update name using newly set epoch
+        user_configs.create_model_name()  # Update name using newly set epoch
         os.environ['WANDB_MODE'] = 'dryrun'
     configs = user_configs.hparams
 
@@ -66,29 +67,25 @@ def main():
 
     # Set local data_generator
     sys.path.insert(1, args.input)
-    import data_generator
-    loader_params = {'batch_size': configs['batch_size'], 'num_workers': 4}
+    import data_generator 
     data_gen = getattr(data_generator, configs['data_generator'])
+    data_module = data_gen(configs)
+    data_module.prepare_data()
+    data_module.setup()
+    print('Done preparing the data.')
 
-    # training data
-    augment = False if 'augment' not in configs else configs['augment']
-    if augment:
+    # Augmentation message
+    if 'augment' in configs and configs['augment']:
         print("Augmenting data")
-    data_train = data_gen('train', conf=configs, augment=augment, test=is_test)
-    train_dataloader = DataLoader(data_train, shuffle=True, **loader_params)
 
-    # validation data
-    data_valid = data_gen('valid', conf=configs, augment=False, test=is_test)
-    valid_dataloader = DataLoader(data_valid, **loader_params)
-
-    # define lightning module
-    shape_in = data_train.data_shape_in
-    module = recursive_find_python_class( configs['module'] )
-    model = module(configs, shape_in) # Should also be changed to custom arguments (**configs)
+    module = recursive_find_python_class(configs['module'])
+    # Should also be changed to custom arguments (**configs)
+    shape_in = configs['data_shape_in']   # color_channel, dim1, dim2, dim3
+    model = module(configs, shape_in)
 
     # transfer learning setup
     if 'pretrained generator' in configs and configs['pretrained_generator']:
-        message = "Setting up transfer learning"
+        tl_message = "Setting up transfer learning"
         pretrained_model_path = Path(configs['pretrained_generator'])
         if pretrained_model_path.exists():
             if pretrained_model_path.name.endswith(".ckpt"):
@@ -107,10 +104,10 @@ def main():
 
         # This should be more generic. What if we are to only freeze some of the layers?
         if 'freeze_encoder' in configs and configs['freeze_encoder']:
-            message += "with frozen encoder."
+            tl_message += "with frozen encoder."
             model.encoder.freeze()
 
-        print(message)
+        print(tl_message)
 
     # wandb dashboard setup
     wandb_logger = WandbLogger(name=configs['version_name'],
@@ -121,13 +118,10 @@ def main():
 
     # callbacks
     callbacks = []
-    if 'callback_image2image' in configs:
-        data_plot = data_gen('valid', conf=configs,
-                             augment=False, test=is_test)
-        plot_dataloader = DataLoader(data_plot, **loader_params)
-        callback_image2image = getattr(
-            plotting, configs['callback_image2image'])
-        callbacks.append(callback_image2image(plot_dataloader))
+    if 'plotting_callback' in configs:
+        plot_configs = configs['plotting_callback']
+        plotting_callback = getattr(plotting, plot_configs['class'])
+        callbacks.append(plotting_callback(data_module, configs))
 
     # checkpointing
     model_path = project_dir.joinpath(
@@ -168,9 +162,10 @@ def main():
                          profiler="simple")
 
     # actual training
-    trainer.fit(model, train_dataloader, valid_dataloader)
+    trainer.fit(model, datamodule=data_module)
 
     # add useful info to saved configs
+    user_configs.hparams['model_dir'] = model_path
     user_configs.hparams['best_model'] = checkpoint_callback.best_model_path
 
     # save the model
