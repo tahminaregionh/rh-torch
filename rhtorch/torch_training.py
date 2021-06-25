@@ -11,7 +11,6 @@ from pathlib import Path
 import argparse
 
 # library package imports
-# from rhtorch.models import modules
 from rhtorch.callbacks import plotting
 from rhtorch.config_utils import UserConfig
 from rhtorch.utilities.modules import recursive_find_python_class
