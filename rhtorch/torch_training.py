@@ -61,12 +61,17 @@ def main():
         os.environ['WANDB_MODE'] = 'dryrun'
     configs = user_configs.hparams
 
+    print("##### USER CONFIGS #######\n")
+    for k, v in configs.items():
+        print(k.ljust(40), v)
+    print("\n##########################")
+
     # Set local data_generator
     sys.path.insert(1, args.input)
-    import data_generator  # revert to data_generator
+    import data_generator 
     data_gen = getattr(data_generator, configs['data_generator'])
     data_module = data_gen(configs)
-    data_module.prepare_train_data()
+    data_module.prepare_data()
     data_module.setup()
     print('Done preparing the data.')
 
@@ -74,18 +79,9 @@ def main():
     if 'augment' in configs and configs['augment']:
         print("Augmenting data")
 
-    color_channels = len(configs['input_files'])
-    shape_in = [color_channels, *configs['patch_size']]
-    user_configs.hparams['color_channels_in'] = color_channels
-    user_configs.hparams['data_shape_in'] = shape_in
-    
-    print("##### USER CONFIGS #######\n")
-    for k, v in configs.items():
-        print(k.ljust(40), v)
-    print("\n##########################")
-    
     module = recursive_find_python_class(configs['module'])
     # Should also be changed to custom arguments (**configs)
+    shape_in = configs['data_shape_in']   # color_channel, dim1, dim2, dim3
     model = module(configs, shape_in)
 
     # transfer learning setup

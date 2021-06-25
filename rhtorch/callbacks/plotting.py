@@ -21,18 +21,24 @@ class Image2ImageLogger(Callback):
         self.vmin = plot_configs['vmin']
         self.vmax = plot_configs['vmax']
         self.titles = ['Input', 'Target', 'Prediction']
-
+    
     def prepare_batch(self, batch):
-        # first input channel
-        x = batch['input0'][tio.DATA]
-        # other input channels if any
-        for i in range(1, self.color_channels):
-            x_i = batch[f'input{i}'][tio.DATA]
-            # axis=0 is batch_size, axis=1 is color_channel
-            x = torch.cat((x, x_i), axis=1)
-        # target channel
-        y = batch['target0'][tio.DATA]
-        return x, y
+        # necessary distinction for use of TORCHIO
+        if isinstance(batch, dict):
+            # first input channel
+            x = batch['input0'][tio.DATA]
+            # other input channels if any
+            for i in range(1, self.in_channels):
+                x_i = batch[f'input{i}'][tio.DATA]
+                # axis=0 is batch_size, axis=1 is color_channel
+                x = torch.cat((x, x_i), axis=1)
+            # target channel
+            y = batch['target0'][tio.DATA]
+            return x, y
+
+        # normal use case
+        else:
+            return batch
 
     def plot_inline(self, d1, d2, d3, color_channel_axis=0):
         """

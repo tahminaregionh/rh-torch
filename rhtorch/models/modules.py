@@ -33,16 +33,22 @@ class LightningAE(pl.LightningModule):
         return self.generator(image)
 
     def prepare_batch(self, batch):
-        # first input channel
-        x = batch['input0'][tio.DATA]
-        # other input channels if any
-        for i in range(1, self.in_channels):
-            x_i = batch[f'input{i}'][tio.DATA]
-            # axis=0 is batch_size, axis=1 is color_channel
-            x = torch.cat((x, x_i), axis=1)
-        # target channel
-        y = batch['target0'][tio.DATA]
-        return x, y
+        # necessary distinction for use of TORCHIO
+        if isinstance(batch, dict):
+            # first input channel
+            x = batch['input0'][tio.DATA]
+            # other input channels if any
+            for i in range(1, self.in_channels):
+                x_i = batch[f'input{i}'][tio.DATA]
+                # axis=0 is batch_size, axis=1 is color_channel
+                x = torch.cat((x, x_i), axis=1)
+            # target channel
+            y = batch['target0'][tio.DATA]
+            return x, y
+
+        # normal use case
+        else:
+            return batch
 
     def training_step(self, batch, batch_idx):
         # training_step defined the train loop. It is independent of forward
@@ -123,7 +129,7 @@ class LightningPix2Pix(LightningAE):
 
     def training_step(self, batch, batch_idx, optimizer_idx):
         # training_step defines the training loop. It is independent of forward
-        inp, tar = batch
+        inp, tar = self.prepare_batch(batch)
         fake_imgs = self.generator(inp)
         bs = inp.size()[0]
 
