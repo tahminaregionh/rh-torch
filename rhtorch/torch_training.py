@@ -10,7 +10,6 @@ import sys
 from pathlib import Path
 
 # library package imports
-from rhtorch.models import modules
 from rhtorch.callbacks import plotting
 from rhtorch.config_utils import UserConfig
 from rhtorch.utilities.modules import recursive_find_python_class
@@ -32,6 +31,20 @@ def main():
     parser.add_argument("-t", "--test", help="Test run for 1 patient",
                         action="store_true", default=False)
 
+    # args for wandb sweep - I don't know if this is the right way to go
+    parser.add_argument("-lr", "--learningrate",
+                        help="Learning rate of generator",
+                        type=float, default=0)
+    parser.add_argument("-opt", "--optimizer",
+                        help="Optimizer for the generator",
+                        type=str, default='')
+    parser.add_argument("-act", "--activation",
+                        help="Activation used throughout the generator architecture",
+                        type=str, default='')
+    parser.add_argument("-pool", "--poolingtype",
+                        help="Down sampling layer type for UNet3D generator",
+                        type=str, default='')
+
     args = parser.parse_args()
     project_dir = Path(args.input)
     is_test = args.test
@@ -45,6 +58,11 @@ def main():
         user_configs.create_model_name() # Update name using newly set epoch
         os.environ['WANDB_MODE'] = 'dryrun'
     configs = user_configs.hparams
+
+    print("##### USER CONFIGS #######\n")
+    for k, v in configs.items():
+        print(k.ljust(40), v)
+    print("\n##########################")
 
     # Set local data_generator
     sys.path.insert(1, args.input)
@@ -124,7 +142,7 @@ def main():
     checkpoint_callback = ModelCheckpoint(
         monitor='val_loss',
         dirpath=checkpoint_dir,
-        filename=f'Checkpoint_min_val_loss',
+        filename='Checkpoint_min_val_loss',
         save_top_k=3,       # saves 3 best models based on monitored value
         save_last=True,     # additionally overwrites a file last.ckpt after each epoch
         period=2,

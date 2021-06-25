@@ -1,0 +1,33 @@
+program: torch_training.py
+project: LowdosePET-PiBVision
+
+# sweep parameters
+method: bayes
+metric:
+  name: val_loss
+  goal: minimize
+parameters:
+  learningrate:
+    min: 0.0001
+    max: 0.01
+  optimizer:
+    values: ["Adam", "Adamw", "SGD"]
+  activation:
+    values: ["ReLU", "SiLU"]
+  poolingtype:
+    values: ["max_pool", "full_conv"]
+early_terminate:
+  type: hyperband
+  max_iter: 100
+  s: 10
+
+# CLI command
+command:
+  - python3
+  - ${program}
+  - "-i"
+  - /homes/raphael/Projects/LowdosePET/PiBVision
+  - "-c"
+  - config.yaml
+  - ${args}
+  

@@ -7,19 +7,27 @@ import socket
 
 
 class UserConfig:
-    def __init__(self, rootdir, arguments=None, overwrite=True):
+    def __init__(self, rootdir, arguments=None, mode='train'):
         self.rootdir = rootdir
         self.config_file = self.is_path(arguments.config)
         self.args = arguments
 
+        # load user config file
+        with open(self.config_file) as cf:
+            self.hparams = yaml.load(cf, Loader=yaml.RoundTripLoader)
+
+        # for inference, only load the config file
+        if mode == 'train':
+            self.training_setup()
+
+    def training_setup(self):
         # load default configs
         default_config_file = Path(__file__).parent.joinpath('default.config')
         with open(default_config_file) as dcf:
             self.default_params = yaml.load(dcf, Loader=yaml.Loader)
 
-        # load user config file
-        with open(self.config_file) as cf:
-            self.hparams = yaml.load(cf, Loader=yaml.RoundTripLoader)
+        # overwrite any parameters passed in throuch CLI
+        self.cli_hparams()
 
         # merge the two dicts
         self.merge_dicts()
@@ -27,9 +35,9 @@ class UserConfig:
         # sanity check on data_folder provided by user
         self.data_path = self.is_path(self.hparams['data_folder'])
 
-        if overwrite or not 'build_date' in self.hparams.keys():
+        if 'build_date' not in self.hparams:
             self.fill_additional_info()
-        if overwrite or not 'model_name' in self.hparams.keys():
+        if 'model_name' not in self.hparams:
             # make model name
             self.create_model_name()
 
@@ -41,17 +49,32 @@ class UserConfig:
             filepath = self.rootdir.joinpath(filepath)
         if not filepath.exists():
             raise FileNotFoundError(
-                f"{path} not found. Define relative to project directory or as absolute path in config file/argument passing.")
+                f"{path} not found. Define relative to project directory or as \
+                  absolute path in config file/argument passing.")
 
         return filepath
 
     def merge_dicts(self):
-        """ adds to the user_params dictionnary any missing key from the default params """
+        """ adds to the user_params dictionnary any missing key from the
+            default params """
 
         for key, value in self.default_params.items():
-            # copy from default if value is not None/0/False and key not already in user config
+            # copy from default if value is not None/0/False and key not
+            # already in user config
             if value and key not in self.hparams:
                 self.hparams[key] = value
+
+    def cli_hparams(self):
+        # I don't know if that is the right way to go
+        # (adding every key one by one)
+        if self.args.learningrate:
+            self.hparams['g_lr'] = self.args.learningrate
+        if self.args.optimizer:
+            self.hparams['g_optimizer'] = self.args.optimizer
+        if self.args.activation:
+            self.hparams['g_activation'] = self.args.activation
+        if self.args.poolingtype:
+            self.hparams['g_pooling_type'] = self.args.poolingtype
 
     def fill_additional_info(self):
         # additional info from args and miscellaneous to save in config
