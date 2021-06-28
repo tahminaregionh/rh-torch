@@ -28,7 +28,7 @@ class Image2ImageLogger(Callback):
             # first input channel
             x = batch['input0'][tio.DATA]
             # other input channels if any
-            for i in range(1, self.in_channels):
+            for i in range(1, self.color_channels):
                 x_i = batch[f'input{i}'][tio.DATA]
                 # axis=0 is batch_size, axis=1 is color_channel
                 x = torch.cat((x, x_i), axis=1)
