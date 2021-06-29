@@ -11,7 +11,10 @@ import torchio as tio
 class LightningAE(pl.LightningModule):
     def __init__(self, hparams, in_shape=(2, 128, 128, 128)):
         super().__init__()
-        self.hparams = hparams
+        try:
+            self.hparams = hparams
+        except AttributeError:
+            self.hparams.update(hparams)
         # (self.img_rows, self.img_cols, self.channels_input)
         self.in_shape = in_shape
         self.in_channels, self.dimx, self.dimy, self.dimz = self.in_shape
