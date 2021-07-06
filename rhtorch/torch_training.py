@@ -139,7 +139,7 @@ def main():
         filename='Checkpoint_min_val_loss',
         save_top_k=3,       # saves 3 best models based on monitored value
         save_last=True,     # additionally overwrites a file last.ckpt after each epoch
-        period=2,
+        every_n_val_epochs=2,
     )
     callbacks.append(checkpoint_callback)
 
