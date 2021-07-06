@@ -200,6 +200,10 @@ class GenericTIODataModule(pl.LightningDataModule):
                                    self.sampler,
                                    num_workers=self.num_workers)
 
+        # setup for trainer.test()
+        if stage == 'test':
+            self.test_set = SubjectsDataset(self.test_subjects)
+
     def train_dataloader(self):
         return DataLoader(self.train_queue, self.batch_size)
 
