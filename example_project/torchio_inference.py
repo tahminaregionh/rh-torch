@@ -89,17 +89,29 @@ if __name__ == '__main__':
     # load the model
     module_name = recursive_find_python_class(configs['module'])
     model = module_name(configs, data_shape_in)
-    ckpt_path = Path(configs['best_model'])
-    model_state_dict = torch.load(ckpt_path)['state_dict']
-    model.load_state_dict(model_state_dict)
+    # Load the final (best) model
+    if 'best_model' in configs:
+        ckpt_path = Path(configs['best_model'])
+        epoch_suffix = ''
+    # Not done training. Load the most recent (best) ckpt
+    else:
+        ckpt_path = project_dir.joinpath('trained_models',
+                                         model_name,
+                                         'checkpoints',
+                                         'Checkpoint_min_val_loss-v2.ckpt')
+        epoch_suffix = None
+    ckpt = torch.load(ckpt_path)
+    if epoch_suffix is None:
+        epoch_suffix = '_e={}'.format(ckpt['epoch'])
+    model.load_state_dict(ckpt['state_dict'])
     model.eval()
 
-    for patient in tqdm(data_module.test_subjects):
+    for patient in tqdm(data_module.test_set):
         patient_id = patient.id
         out_subdir = infer_dir.joinpath(patient_id)
         out_subdir.mkdir(parents=True, exist_ok=True)
         output_file = out_subdir.joinpath(
-            f'Inferred_{model_name}.nii.gz')
+            f'Inferred_{model_name}{epoch_suffix}.nii.gz')
 
         # check if recontruction already done
         if not output_file.exists():
@@ -110,9 +122,30 @@ if __name__ == '__main__':
             # rescale -- need a better way to revert preprocessing steps from DataModule
             full_volume = full_volume * configs['pet_normalization_constant']
 
-            # save as nifty - can add saving as .npy as well
+            """ Below shows several ways to save the output """
             ref_nifty_file = data_dir.joinpath(
                 patient_id).joinpath(target_filename)
+
+            # save as nifty with nibabel - can add saving as .npy as well
             save_nifty(full_volume, ref_nifty_file, output_file)
+
+            # save nifty with torchio
+            tio.ScalarImage(tensor=full_volume,
+                            affine=patient.input0.affine).save(output_file)
+
+            # When any transformation is performed as part of
+            # setup(stage='test'), we need to invert these. Do this by adding
+            # the inferred image to the patient tio.Subject and invert.
+            # Not all transformations can be inverted. We will resample to the
+            # reference to make sure e.g. the voxel spacing are correct.
+            temp = tio.ScalarImage(tensor=torch.rand(1, 1, 1, 1),
+                                   affine=patient.input0.affine)
+            patient.add_image(temp, 'predicted')
+            patient.predicted.set_data(full_volume)
+            patient.add_image(tio.ScalarImage(ref_nifty_file), 'reference')
+            resample = tio.Resample('reference')
+            patient_native_space = resample(patient.apply_inverse_transform())
+            patient_native_space.predicted.save(output_file)
+
         else:
             print(f'Data already reconstructed with model {model_name}')
