@@ -98,10 +98,19 @@ class GenericTIODataModule(pl.LightningDataModule):
 
     # Normalization functions
     def get_normalization_transform(self, tr):
+        """ Each normalization must have an inv_normalization applied
+            in de_normalize """
         if tr == 'ct_normalization':  # Left as example. Overwrite if needed
             return Lambda(lambda x: (x + 1024.0) / 2000.0)
+        elif tr == 'inv_ct_normalization':
+            return Lambda(lambda x: x*2000.0 - 1024.0)
         else:
             return None
+
+    # Helper function to invert the normalization performed during loading
+    def de_normalize(self, img, transform):
+        trans = get_normalization_transform('inv_{}'.format(transform))
+        return img if trans is None else trans(img)
 
     def prepare_patient_info(self, filename, preprocess_step=None):
 

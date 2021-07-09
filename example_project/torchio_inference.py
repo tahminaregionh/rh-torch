@@ -13,7 +13,7 @@ from tqdm import tqdm
 import os
 
 
-def infer_data_from_model(model, subject, ps=None, po=None, bs=1):
+def infer_data_from_model(model, subject, ps=None, po=None, bs=1, GPU=True):
     """Infer a full volume given a trained model for 1 patient
 
     Args:
@@ -32,6 +32,8 @@ def infer_data_from_model(model, subject, ps=None, po=None, bs=1):
     with torch.no_grad():
         for patches_batch in patch_loader:
             patch_x, _ = model.prepare_batch(patches_batch)
+            if GPU:
+                patch_x = patch_x.to('cuda')
             locations = patches_batch[tio.LOCATION]
             patch_y = model(patch_x)
             aggregator.add_batch(patch_y, locations)
@@ -56,6 +58,9 @@ if __name__ == '__main__':
                         type=str, default='config.yaml')
     parser.add_argument("-t", "--test",
                         help="Only use a subset of the valid dataset.",
+                        action="store_true", default=False)
+    parser.add_argument("--CPU",
+                        help="Only use CPU",
                         action="store_true", default=False)
 
     args = parser.parse_args()
@@ -104,6 +109,8 @@ if __name__ == '__main__':
     if epoch_suffix is None:
         epoch_suffix = '_e={}'.format(ckpt['epoch'])
     model.load_state_dict(ckpt['state_dict'])
+    if not args.CPU:
+        model.cuda()
     model.eval()
 
     for patient in tqdm(data_module.test_set):
@@ -117,10 +124,7 @@ if __name__ == '__main__':
         if not output_file.exists():
             # full volume inference - returns np.ndarray
             full_volume = infer_data_from_model(
-                model, patient, patch_size, patch_overlap)
-
-            # rescale -- need a better way to revert preprocessing steps from DataModule
-            full_volume = full_volume * configs['pet_normalization_constant']
+                model, patient, patch_size, patch_overlap, GPU=not args.CPU)
 
             """ Below shows several ways to save the output """
             ref_nifty_file = data_dir.joinpath(
@@ -145,6 +149,12 @@ if __name__ == '__main__':
             patient.add_image(tio.ScalarImage(ref_nifty_file), 'reference')
             resample = tio.Resample('reference')
             patient_native_space = resample(patient.apply_inverse_transform())
+            # Apply de-normalization using inverse of preproccess transform on
+            # the target image. "inv_<proprocess_step[0]>" must be defined
+            # in data_module.get_normalization_transform
+            patient_native_space = data_module.de_normalize(
+                patient_native_space,
+                configs['target_files']['preprocess_step'][0])
             patient_native_space.predicted.save(output_file)
 
         else:
