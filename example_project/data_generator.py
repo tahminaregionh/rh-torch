@@ -49,10 +49,16 @@ class ExampleTIODataModule(GenericTIODataModule):
 
     # Normalization functions
     def get_normalization_transform(self, tr):
+        # Hint: If you only load pre-normalized files, you can still invert
+        # normalization here, by only declaring an inv_<...> clause.
         if tr == 'ct_normalization':
             return Lambda(lambda x: (x + 1024.0) / 2000.0)
+        elif tr == 'inv_ct_normalization':
+            return Lambda(lambda x: x*2000.0 - 1024.0)
         elif tr == 'pet_hard_normalization':
             return Lambda(lambda x: x / self.pet_norm)
+        elif tr == 'inv_pet_hard_normalization':
+            return Lambda(lambda x: x * self.pet_norm)
         else:
             return None
 
