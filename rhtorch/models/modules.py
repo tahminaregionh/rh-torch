@@ -130,6 +130,9 @@ class LightningPix2Pix(LightningAE):
         self.d_params = self.discriminator.parameters()
         self.LAMBDA = 100
 
+    def toggle_optimizer(self, *args, **kwargs):
+        pass
+
     def training_step(self, batch, batch_idx, optimizer_idx):
         # training_step defines the training loop. It is independent of forward
         inp, tar = self.prepare_batch(batch)
