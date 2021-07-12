@@ -135,7 +135,7 @@ def main():
 
     checkpoint_callback = ModelCheckpoint(
         monitor='val_loss',
-        dirpath=checkpoint_dir,
+        dirpath=str(checkpoint_dir), # Fixes fsspec error with pathlib.path.stat() missing follow_symlinks argument
         filename='Checkpoint_min_val_loss',
         save_top_k=3,       # saves 3 best models based on monitored value
         save_last=True,     # additionally overwrites a file last.ckpt after each epoch
