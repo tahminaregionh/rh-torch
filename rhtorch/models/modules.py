@@ -141,9 +141,9 @@ class LightningPix2Pix(LightningAE):
 
         # (bs, 1, 16/16=1, 128/16=8, 128/16=8)    # 16=2**4 for 4x down conv of the patch
         valid = torch.ones((bs,) + self.disc_patch,
-                           device=self.device, requires_grad=True) #False)
+                           device=self.device, requires_grad=False)
         fake = torch.zeros((bs,) + self.disc_patch,
-                           device=self.device, requires_grad=True) #False)
+                           device=self.device, requires_grad=False)
 
         # losses to log only (not for training)-> raise problems
         # self.log('train_accuracy', self.accuracy(fake_imgs, tar))
