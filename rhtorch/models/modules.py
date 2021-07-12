@@ -138,13 +138,13 @@ class LightningPix2Pix(LightningAE):
 
         # (bs, 1, 16/16=1, 128/16=8, 128/16=8)    # 16=2**4 for 4x down conv of the patch
         valid = torch.ones((bs,) + self.disc_patch,
-                           device=self.device, requires_grad=False)
+                           device=self.device, requires_grad=True) #False)
         fake = torch.zeros((bs,) + self.disc_patch,
-                           device=self.device, requires_grad=False)
+                           device=self.device, requires_grad=True) #False)
 
         # losses to log only (not for training)-> raise problems
         # self.log('train_accuracy', self.accuracy(fake_imgs, tar))
-        self.log('train_mse', self.mse_loss(fake_imgs, tar), sync_dist=True)
+        self.log('train_mse', self.mse_loss(fake_imgs, tar)) #, sync_dist=True)
 
         #  Train Generator through the GAN
         if optimizer_idx == 0:
@@ -159,8 +159,8 @@ class LightningPix2Pix(LightningAE):
             g_loss = self.g_loss_train(fake_imgs, tar)
             gan_loss = d_loss + (self.LAMBDA * g_loss)
             # implied for generator
-            self.log('train_loss', g_loss, sync_dist=True)
-            self.log('train_gan_loss', gan_loss, sync_dist=True)
+            self.log('train_loss', g_loss) #, sync_dist=True)
+            self.log('train_gan_loss', gan_loss) #, sync_dist=True)
 
             return gan_loss
 
