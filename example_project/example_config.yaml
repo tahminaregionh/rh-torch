@@ -1,6 +1,6 @@
 # main config to train models
-project_name: LowdosePET-PiBVision          # Used for WANDB
-version_name: UNET_test_v23                 # Make run unique by changing this counter
+project_name: ExampleProject          # Used for WANDB
+version_name: UNet_testv1             # Make run unique by changing this counter
 
 # main model:
 precision: 32
@@ -30,9 +30,9 @@ g_loss: MeanAbsoluteError
 # d_loss: BCEWithLogitsLoss
 
 # data:
-data_split_pkl: PiBVision_train_test_split_6_fold.json    # inside data folder
-data_generator: GenericDataModule
-data_folder: data_anonymized_complete_resampled           # inside project dir
+data_split_pkl: ExampleProject_train_test_split_6_fold.json    # inside data folder
+data_generator: ExampleTIODataModule
+data_folder: my_data_folder           # inside project dir
 pet_normalization_constant: 32676
 augment: True
 data_shape: [128, 128, 128]
@@ -41,10 +41,10 @@ repeat_patient_list: 1
 
 # data files:
 input_files: 
-  name: ['pet_lowdose_bet.npy', 'ct.npy']
+  name: ['pet_lowdose_bet.nii.gz', 'ct.nii.gz']          # .npy, .nii, .nii.gz, .mnc, dcm_folder
   preprocess_step: ['pet_hard_normalization', 'ct_normalization']
 target_files:
-  name: ['pet_highdose_bet.npy']
+  name: ['pet_highdose_bet.nii.gz']
   preprocess_step: ['pet_hard_normalization']
 
 # for plotting during training
