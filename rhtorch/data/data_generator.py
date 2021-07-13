@@ -111,7 +111,7 @@ class GenericTIODataModule(pl.LightningDataModule):
 
     # Helper function to invert the normalization performed during loading
     def de_normalize(self, img, transform):
-        trans = get_normalization_transform('inv_{}'.format(transform))
+        trans = self.get_normalization_transform(f"inv_{transform}")
         return img if trans is None else trans(img)
 
     def prepare_patient_info(self, filename, preprocess_step=None):
@@ -189,19 +189,16 @@ class GenericTIODataModule(pl.LightningDataModule):
         return augment
 
     def setup(self, stage=None):
-        # train/test split subjects
-        train_subjects, val_subjects = train_test_split(
-            self.subjects, test_size=.2, random_state=42)
 
         # setup for trainer.fit()
         if stage in (None, 'fit'):
             self.transform = self.get_augmentation_transform() \
-                             if self.augment else None
+                if self.augment else None
 
             # datasets
-            self.train_set = SubjectsDataset(train_subjects,
+            self.train_set = SubjectsDataset(self.train_subjects,
                                              transform=self.transform)
-            self.val_set = SubjectsDataset(val_subjects)
+            self.val_set = SubjectsDataset(self.val_subjects)
 
             # queues
             self.train_queue = Queue(self.train_set,
@@ -244,8 +241,10 @@ for each k-fold (e.g. 0..4). The in-loop validation set is generated from the tr
 
 """
 
+
 class DatasetPreprocessedRandomPatches(Dataset):
     """ Generates data for Keras """
+
     def __init__(self, data_type='train', conf=None, augment=False, test=False):
         """ Initialization """
 
@@ -257,14 +256,16 @@ class DatasetPreprocessedRandomPatches(Dataset):
         # load patient list in the json file
         self.patients = []
         self.patches = {}
-        self.repeat_list = 1 if not 'repeat_patient_list' in list(conf.keys()) else conf['repeat_patient_list']
+        self.repeat_list = 1 if not 'repeat_patient_list' in list(
+            conf.keys()) else conf['repeat_patient_list']
         self.load_splits(test)
 
         # set color channels
         self.color_channels = self.config['color_channels_in']
 
         # keep track of the original data shape
-        self.data_shape_in = [self.color_channels, *self.full_data_shape]     # add the color channel (channel_first in Pytorch)
+        # add the color channel (channel_first in Pytorch)
+        self.data_shape_in = [self.color_channels, *self.full_data_shape]
         self.data_shape_out = [1, *self.full_data_shape]
 
     # loading and reading data splitting
@@ -273,12 +274,13 @@ class DatasetPreprocessedRandomPatches(Dataset):
             with open(self.config['data_split_pkl'], 'rb') as f:
                 split_data_info = pickle.load(f)
         elif self.config['data_split_pkl'].endswith('.yaml'):
-            pass # to be implemented
+            pass  # to be implemented
 
         if self.data_type == 'test':
             self.patients = split_data_info[f"test_{self.config['k_fold']}"]
         else:
-            train,valid = train_test_split(split_data_info[f"train_{self.config['k_fold']}"],test_size=.2,random_state=42)
+            train, valid = train_test_split(
+                split_data_info[f"train_{self.config['k_fold']}"], test_size=.2, random_state=42)
             self.patients = train if self.data_type == 'train' else valid
 
             # Load list of patches
@@ -287,13 +289,12 @@ class DatasetPreprocessedRandomPatches(Dataset):
                 if ID in self.patients:
                     if not ID in self.patches:
                         self.patches[ID] = []
-                    self.patches[ID].append( file )
+                    self.patches[ID].append(file)
             # Remove patients without any patches
-            self.patients = [ p for p in self.patients if p in self.patches ]
+            self.patients = [p for p in self.patients if p in self.patches]
 
             # REPEAT
-            self.patients = np.repeat(self.patients,self.repeat_list)
-
+            self.patients = np.repeat(self.patients, self.repeat_list)
 
         self.full_data_shape = self.config["data_shape"]
 
@@ -318,7 +319,6 @@ class DatasetPreprocessedRandomPatches(Dataset):
 
         return torch.from_numpy(X).float(), torch.from_numpy(y).float()
 
-
     def data_generation(self, patient_id):
         """ Generates data of batch_size samples """
         # X : (batch_size, n_channels, v_size, v_size, v_size)
@@ -330,10 +330,10 @@ class DatasetPreprocessedRandomPatches(Dataset):
     def load_patch(self, PID):
 
         # Get patch
-        patch = random.choice( self.patches[PID] )
+        patch = random.choice(self.patches[PID])
 
-        X = np.load(os.path.join(self.rootdir,'patches',patch))
-        y = np.load(os.path.join(self.rootdir,'gt',patch))
+        X = np.load(os.path.join(self.rootdir, 'patches', patch))
+        y = np.load(os.path.join(self.rootdir, 'gt', patch))
 
         # Patches should be channels first. If not, use the below to swap
         #X = np.rollaxis(X,-1)
@@ -344,31 +344,32 @@ class DatasetPreprocessedRandomPatches(Dataset):
             # Augment data
             r = np.random.random()
             if r < 0.2:
-                X = np.rot90(X,1,axes=(2,3)) # rot 90
-                y = np.rot90(y,1,axes=(1,3))
+                X = np.rot90(X, 1, axes=(2, 3))  # rot 90
+                y = np.rot90(y, 1, axes=(1, 3))
             elif r < 0.4:
-                X = np.rot90(X,3,axes=(2,3)) # rot -90
-                y = np.rot90(y,3,axes=(2,3))
+                X = np.rot90(X, 3, axes=(2, 3))  # rot -90
+                y = np.rot90(y, 3, axes=(2, 3))
             elif r < 0.6:
-                X = np.rot90(X,2,axes=(2,3)) # flip UD
-                y = np.rot90(y,2,axes=(2,3))
+                X = np.rot90(X, 2, axes=(2, 3))  # flip UD
+                y = np.rot90(y, 2, axes=(2, 3))
             elif r < 0.8:
-                X = np.fliplr(X) # flip LR
+                X = np.fliplr(X)  # flip LR
                 y = np.fliplr(y)
 
         # Normalize
-        X,y = self.normalize(X,y)
+        X, y = self.normalize(X, y)
 
-        return X,y
+        return X, y
 
     # Function to load the full volume of a patient. Has to be overloaded
     def load_full_volume(self, patient_id):
-        sys.exit('This function has to be overloaded when extending the generic function')
+        sys.exit(
+            'This function has to be overloaded when extending the generic function')
 
-    def normalize ( self, in_img, out_img ):
+    def normalize(self, in_img, out_img):
         # Do nothing
         return in_img, out_img
 
-    def de_normalize( self, image ):
+    def de_normalize(self, image):
         # Do nothing
         return image
