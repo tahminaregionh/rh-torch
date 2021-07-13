@@ -55,6 +55,8 @@ class GenericTIODataModule(pl.LightningDataModule):
 
         # variables to be filled later
         self.subjects = None
+        self.train_subjects = None
+        self.val_subjects = None
         self.test_subjects = None
         self.train_set = None
         self.val_set = None
@@ -168,6 +170,11 @@ class GenericTIODataModule(pl.LightningDataModule):
         self.subjects = self.prepare_patient_data('train')
         # Set up test_subject only for inference.
         self.test_subjects = self.prepare_patient_data('test')
+
+        # train/test split subjects
+        self.train_subjects, self.val_subjects = train_test_split(
+            self.subjects, test_size=.1, random_state=42)
+        assert len(self.val_subjects) > 0
 
     def get_augmentation_transform(self):
         augment = Compose([
