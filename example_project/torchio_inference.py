@@ -100,10 +100,13 @@ if __name__ == '__main__':
         epoch_suffix = ''
     # Not done training. Load the most recent (best) ckpt
     else:
-        ckpt_path = project_dir.joinpath('trained_models',
+        ckpt_dir = project_dir.joinpath('trained_models',
                                          model_name,
-                                         'checkpoints',
-                                         'Checkpoint_min_val_loss-v2.ckpt')
+                                         'checkpoints')
+        # Get the most recent save, ignoring last.ckpt.
+        paths = sorted(Path(ckpt_dir).iterdir(), key=os.path.getmtime)
+        paths = [p for p in paths if not p.name == 'last.ckpt']
+        ckpt_path = paths[-1]
         epoch_suffix = None
     ckpt = torch.load(ckpt_path)
     if epoch_suffix is None:
