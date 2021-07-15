@@ -64,9 +64,6 @@ class ExampleTIODataModule(GenericTIODataModule):
 
     # Redefined setup to add preprocessing_transform on all data.
     def setup(self, stage=None):
-        # train/test split subjects
-        train_subjects, val_subjects = train_test_split(
-            self.subjects, test_size=.2, random_state=42)
 
         # Add spatial preprocessing
         self.preprocessing_transform = Compose([ToCanonical(),
@@ -83,9 +80,9 @@ class ExampleTIODataModule(GenericTIODataModule):
 
             # datasets
             self.train_set = SubjectsDataset(
-                train_subjects, transform=self.transform)
+                self.train_subjects, transform=self.transform)
             self.val_set = SubjectsDataset(
-                val_subjects, transform=self.preprocessing_transform)
+                self.val_subjects, transform=self.preprocessing_transform)
 
             # queues
             self.train_queue = Queue(self.train_set,

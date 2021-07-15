@@ -40,7 +40,7 @@ patch_size: [16, 128, 128]
 repeat_patient_list: 1
 
 # data files:
-input_files: 
+input_files:
   name: ['pet_lowdose_bet.nii.gz', 'ct.nii.gz']          # .npy, .nii, .nii.gz, .mnc, dcm_folder
   preprocess_step: ['pet_hard_normalization', 'ct_normalization']
 target_files:
@@ -53,6 +53,7 @@ plotting_callback:
   viewing_axis: 1
   vmin: null
   vmax: null
+  fixed_slice: null # Defaults to center of viewing_axis
 
 
 # model-specific info (self-generated) - do not write anything beyond here

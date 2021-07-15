@@ -121,7 +121,7 @@ def main():
     if 'plotting_callback' in configs:
         plot_configs = configs['plotting_callback']
         plotting_callback = getattr(plotting, plot_configs['class'])
-        callbacks.append(plotting_callback(data_module, configs))
+        callbacks.append(plotting_callback(model, data_module, configs))
 
     # checkpointing
     model_path = project_dir.joinpath(

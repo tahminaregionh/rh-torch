@@ -7,21 +7,23 @@ import torchio as tio
 
 
 class Image2ImageLogger(Callback):
-    def __init__(self, data_module, config=None):
+    def __init__(self, model, data_module, config=None):
         super().__init__()
         val_data = data_module.val_dataloader()
         batch = next(iter(val_data))
         self.color_channels = config['color_channels_in']
-        self.X, self.y = self.prepare_batch(batch)
+        self.X, self.y = model.prepare_batch(batch)
 
         # plotting properties from config
         plot_configs = config['plotting_callback']
         self.viewing_axis = plot_configs['viewing_axis']
-        # self.fixed_slice = config['fixed_slice']
+        self.fixed_slice = plot_configs['fixed_slice'] \
+            if hasattr(plot_configs, 'fixed_slice') else None
         self.vmin = plot_configs['vmin']
         self.vmax = plot_configs['vmax']
         self.titles = ['Input', 'Target', 'Prediction']
-    
+
+    """
     def prepare_batch(self, batch):
         # necessary distinction for use of TORCHIO
         if isinstance(batch, dict):
@@ -39,6 +41,7 @@ class Image2ImageLogger(Callback):
         # normal use case
         else:
             return batch
+    """
 
     def plot_inline(self, d1, d2, d3, color_channel_axis=0):
         """
@@ -51,7 +54,7 @@ class Image2ImageLogger(Callback):
         d3 : numpy.ndarray
             Infered data based on input data
         color_channel_axis : int, optional
-            Axis for color channel in the numpy array . 
+            Axis for color channel in the numpy array .
             Default is 0 for Pytorch models (cc, dimx, dimy, dimz)
             Use 3 for TF models (dimx, dimy, dimz, cc)
         vmin : Lower bound for color channel. Default (None) used to plot full range
@@ -72,10 +75,19 @@ class Image2ImageLogger(Callback):
 
         for idx in range(num_dat):
             single_data = d_arr.take(indices=idx, axis=color_channel_axis)
-            slice_i = int(single_data.shape[self.viewing_axis] / 2)
-            single_slice = single_data.take(indices=slice_i, axis=self.viewing_axis)
+            if single_data.ndim > 2:
+                # 3D data, pick a slice
+                slice_i = self.fixed_slice \
+                    if self.fixed_slice is not None \
+                    else int(single_data.shape[self.viewing_axis] / 2)
+                single_slice = single_data.take(indices=slice_i,
+                                                axis=self.viewing_axis)
+            else:
+                # 2D data
+                single_slice = single_data
             text_pos = single_slice.shape[0] * 0.98
-            ax[idx].imshow(single_slice, cmap='gray', vmin=self.vmin, vmax=self.vmax)
+            ax[idx].imshow(
+                single_slice, cmap='gray', vmin=self.vmin, vmax=self.vmax)
             ax[idx].axis('off')
             ax[idx].text(3, text_pos, self.titles[idx],
                          color='white', fontsize=12)

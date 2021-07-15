@@ -9,6 +9,32 @@ git clone https://github.com/CAAI/rh-torch.git && cd rh-torch
 pip install -e . 
 ```
 
+## SUGGESTED PROJECT FOLDER TREE
+
+The following directory tree allows to use GenericTIODataModule as is for loading data for training/inference. Otherwise you need to overwrite the prepare_patient_data method to accomodate for your directory structure.
+```
+Project directory
+│   ├── data directory
+│   │   ├── patient1
+│   │   │   ├── input_file1.npy
+│   │   │   ├── input_file2.npy
+│   │   │   └── target_file1.npy
+│   │   ├── patient2
+│   │   ├── ...
+│   │   ├── patientn
+│   │   ├── train_test_split.json
+│   │
+│   ├── data_generator.py
+│   └── my_config.yaml
+```
+
+## BASIC USAGE
+
+```
+torch_training -i ~/example_project -c ~/example_project/my_config.yaml
+```
+After training, the model is saved in ~/example_project/trained_models along with a copy of the config file.
+
 ## HOW TO CONTRIBUTE
 
 Create your edits in a different branch, decicated to a few specific things. We prefer many minor edits over one huge. Once everything is well-documented and tested, perform a pull request for your edits to be made available in the main branch. See steps here:

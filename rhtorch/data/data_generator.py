@@ -55,6 +55,8 @@ class GenericTIODataModule(pl.LightningDataModule):
 
         # variables to be filled later
         self.subjects = None
+        self.train_subjects = None
+        self.val_subjects = None
         self.test_subjects = None
         self.train_set = None
         self.val_set = None
@@ -169,6 +171,11 @@ class GenericTIODataModule(pl.LightningDataModule):
         # Set up test_subject only for inference.
         self.test_subjects = self.prepare_patient_data('test')
 
+        # train/test split subjects
+        self.train_subjects, self.val_subjects = train_test_split(
+            self.subjects, test_size=.1, random_state=42)
+        assert len(self.val_subjects) > 0
+
     def get_augmentation_transform(self):
         augment = Compose([
             RandomAffine(scales=(0.9, 1.2),                # zoom
@@ -182,9 +189,6 @@ class GenericTIODataModule(pl.LightningDataModule):
         return augment
 
     def setup(self, stage=None):
-        # train/test split subjects
-        train_subjects, val_subjects = train_test_split(
-            self.subjects, test_size=.2, random_state=42)
 
         # setup for trainer.fit()
         if stage in (None, 'fit'):
@@ -192,9 +196,9 @@ class GenericTIODataModule(pl.LightningDataModule):
                 if self.augment else None
 
             # datasets
-            self.train_set = SubjectsDataset(train_subjects,
+            self.train_set = SubjectsDataset(self.train_subjects,
                                              transform=self.transform)
-            self.val_set = SubjectsDataset(val_subjects)
+            self.val_set = SubjectsDataset(self.val_subjects)
 
             # queues
             self.train_queue = Queue(self.train_set,
