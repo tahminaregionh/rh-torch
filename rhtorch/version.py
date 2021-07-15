@@ -6,7 +6,7 @@ Created on Fri May 21 08:58:01 2021
 @author: claes
 """
 
-__version__ = '0.1.0'
+__version__ = '0.1.1'
 
 """
 
@@ -17,4 +17,5 @@ VERSIONING (UPDATED WHEN PR ARE MERGED INTO MASTER BRANCH)
  0.0.4 # Added dev option to rhtorch.models (CL 25-05-2021)
  0.0.5 # Generic UNet3D in autoencoders.py (RD 25-05-2021)
  0.1.0 # Added torchio for data handling (RD 25-06-2021)
+ 0.1.1 # Bug-fix for fsspec failing to store and load checkpoints 
 """
