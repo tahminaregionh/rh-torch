@@ -130,12 +130,15 @@ def main():
     checkpoint_dir = model_path.joinpath('checkpoints')
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
     existing_checkpoint = checkpoint_dir.joinpath('last.ckpt')
-    if not existing_checkpoint.exists():
-        existing_checkpoint = None
+    existing_checkpoint = None \
+        if not existing_checkpoint.exists() else str(existing_checkpoint)
+    checkpoint_dir = str(checkpoint_dir)
+    # str() added to fix fsspec error with pathlib.path.stat() missing
+    # follow_symlinks argument
 
     checkpoint_callback = ModelCheckpoint(
         monitor='val_loss',
-        dirpath=str(checkpoint_dir), # Fixes fsspec error with pathlib.path.stat() missing follow_symlinks argument
+        dirpath=checkpoint_dir,
         filename='Checkpoint_min_val_loss-{epoch:03d}',
         save_top_k=3,       # saves 3 best models based on monitored value
         save_last=True,     # additionally overwrites a file last.ckpt after each epoch
