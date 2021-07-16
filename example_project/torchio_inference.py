@@ -3,7 +3,10 @@ import torchio as tio
 from torch.utils.data import DataLoader
 from torchio.data import GridSampler, GridAggregator
 from rhtorch.config_utils import UserConfig
-from rhtorch.utilities.modules import recursive_find_python_class
+from rhtorch.utilities.modules import (
+    recursive_find_python_class,
+    find_best_checkpoint
+)
 import numpy as np
 from pathlib import Path
 import argparse
@@ -100,13 +103,8 @@ if __name__ == '__main__':
         epoch_suffix = ''
     # Not done training. Load the most recent (best) ckpt
     else:
-        ckpt_dir = project_dir.joinpath('trained_models',
-                                         model_name,
-                                         'checkpoints')
-        # Get the most recent save, ignoring last.ckpt.
-        paths = sorted(Path(ckpt_dir).iterdir(), key=os.path.getmtime)
-        paths = [p for p in paths if not p.name == 'last.ckpt']
-        ckpt_path = paths[-1]
+        ckpt_path = find_best_checkpoint(project_dir.joinpath(
+            'trained_models', model_name, 'checkpoints'))
         epoch_suffix = None
     ckpt = torch.load(ckpt_path)
     if epoch_suffix is None:
