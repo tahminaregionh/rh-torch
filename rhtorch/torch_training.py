@@ -59,11 +59,7 @@ def main():
         user_configs.create_model_name()  # Update name using newly set epoch
         os.environ['WANDB_MODE'] = 'dryrun'
     configs = user_configs.hparams
-
-    print("##### USER CONFIGS #######\n")
-    for k, v in configs.items():
-        print(k.ljust(40), v)
-    print("\n##########################")
+    user_configs.pprint()
 
     # Set local data_generator
     sys.path.insert(1, args.input)

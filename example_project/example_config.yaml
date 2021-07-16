@@ -50,6 +50,8 @@ target_files:
 # for plotting during training
 plotting_callback:
   class: Image2ImageLogger
+  num_plots: 8
+  cmap: gray
   viewing_axis: 1
   vmin: null
   vmax: null
