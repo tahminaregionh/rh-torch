@@ -5,7 +5,8 @@ import torch
 from rhtorch.version import __version__
 import socket
 import os
-
+import torchio as tio 
+import pytorch_lightning as pl
 
 class UserConfig:
     def __init__(self, rootdir, arguments=None, mode='train'):
@@ -86,11 +87,14 @@ class UserConfig:
         self.hparams['data_folder'] = str(self.data_path)
         self.hparams['config_file'] = str(self.config_file)
         self.hparams['k_fold'] = self.args.kfold
+        self.hparams['hostname'] = socket.gethostname()
         self.hparams['GPUs'] = torch.cuda.device_count()
         self.hparams['global_batch_size'] = self.hparams['batch_size'] * \
             self.hparams['GPUs']
         self.hparams['rhtorch_version'] = __version__
-        self.hparams['hostname'] = socket.gethostname()
+        self.hparams['pytorch_version'] = torch.__version__
+        self.hparams['torchio_version'] = tio.__version__
+        self.hparams['pytorch_lightning_version'] = pl.__version__
 
     def create_model_name(self):
         patch_size = 'x'.join(map(str, self.hparams['patch_size']))
@@ -106,3 +110,15 @@ class UserConfig:
         self.hparams.yaml_set_start_comment(f'Config file for {model_name}')
         with open(config_file, 'w') as file:
             yaml.dump(self.hparams, file, Dumper=yaml.RoundTripDumper)
+            
+    def pprint(self):
+        print("\n####################### USER CONFIGS #######################")
+        for k, v in self.hparams.items():
+            
+            if isinstance(v, yaml.comments.CommentedMap):
+                print(k.ljust(40))
+                for kp, vp in v.items():
+                    print(' -', kp.ljust(37), vp)   
+            else:
+                print(k.ljust(40), v)             
+        print("############################################################\n")
