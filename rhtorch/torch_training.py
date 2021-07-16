@@ -126,7 +126,6 @@ def main():
     # checkpointing
     model_path = project_dir.joinpath(
         'trained_models').joinpath(configs['model_name'])
-    model_path.mkdir(parents=True, exist_ok=True)
     checkpoint_dir = model_path.joinpath('checkpoints')
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
     existing_checkpoint = checkpoint_dir.joinpath('last.ckpt')
