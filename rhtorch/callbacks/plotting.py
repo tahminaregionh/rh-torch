@@ -1,4 +1,5 @@
 from pytorch_lightning.callbacks import Callback
+from torch.utils.data import DataLoader
 import wandb
 import matplotlib.pyplot as plt
 import numpy as np
@@ -8,28 +9,20 @@ import torch
 class Image2ImageLogger(Callback):
     def __init__(self, model, data_module, config=None):
         super().__init__()
-
-        val_data = iter(data_module.val_dataloader())
-        # loading a first batch as default
-        batch = next(val_data)
-        self.X, self.y = model.prepare_batch(batch)
-
+        
         plot_configs = config['plotting_callback']
         batch_size = config['batch_size']
         num_plots = plot_configs['num_plots'] if 'num_plots' in plot_configs else batch_size
-
-        self.color_channels = config['color_channels_in']
-
-        # loading more batches if needed
+        ## TODO OOM issue if num_plots > batch_size
         if num_plots > batch_size:
-            for _ in range(num_plots // batch_size - 1):
-                batch = next(val_data)
-                self.Xi, self.yi = model.prepare_batch(batch)
-                self.X = torch.cat((self.X, self.Xi), dim=0)
-                self.y = torch.cat((self.y, self.yi), dim=0)
-        elif num_plots < batch_size:
-            self.X = self.X[:num_plots]
-            self.y = self.y[:num_plots]
+            num_plots = batch_size
+            print('Number of plots for callback currently set <= batch_size until bug fix.')
+            
+        val_data = DataLoader(data_module.val_set, num_plots)
+        # loading a first batch as default
+        batch = next(iter(val_data))
+        self.X, self.y = model.prepare_batch(batch)
+        self.color_channels = config['color_channels_in']
 
         # plotting properties from config
         self.viewing_axis = plot_configs['viewing_axis']
