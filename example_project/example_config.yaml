@@ -16,6 +16,7 @@ g_filters: [64, 128, 256, 512, 1024]
 g_activation: SiLU
 g_optimizer: Adam
 g_lr: 1e-4
+g_weight_decay: 0
 # lr_scheduler: exponential_decay_0.01
 g_loss: MeanAbsoluteError
 
@@ -27,6 +28,7 @@ g_loss: MeanAbsoluteError
 # discriminator: ConvNetDiscriminator
 # d_optimizer: Adam
 # d_lr: 2e-4
+# d_weight_decay: 0
 # d_loss: BCEWithLogitsLoss
 
 # data:
