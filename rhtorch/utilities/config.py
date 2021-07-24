@@ -62,9 +62,9 @@ class UserConfig:
             default params """
 
         for key, value in self.default_params.items():
-            # copy from default if value is not None/0/False and key not
+            # copy from default if value is not None and key not
             # already in user config
-            if value and key not in self.hparams:
+            if value is not None and key not in self.hparams:
                 self.hparams[key] = value
 
     def cli_hparams(self):
