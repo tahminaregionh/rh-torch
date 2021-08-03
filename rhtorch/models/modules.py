@@ -24,7 +24,7 @@ class LightningAE(pl.LightningModule):
             hparams['generator'])(self.in_channels, **hparams)
         self.g_optimizer = getattr(torch.optim, hparams['g_optimizer'])
         self.lr = hparams['g_lr']
-        self.g_weight_decay = hparams['g_weight_decay']
+        self.g_weight_decay = hparams['g_weight_decay'] if 'g_weight_decay' in self.hparams else 0
         self.g_loss_train = getattr(tm, hparams['g_loss'])()  # MAE
         self.g_loss_val = getattr(tm, hparams['g_loss'])()  # MAE
         self.g_params = self.generator.parameters()
