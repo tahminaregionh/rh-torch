@@ -11,15 +11,10 @@ class Image2ImageLogger(Callback):
         super().__init__()
         
         plot_configs = config['plotting_callback']
-        batch_size = config['batch_size']
-        num_plots = plot_configs['num_plots'] if 'num_plots' in plot_configs else batch_size
-        ## TODO OOM issue if num_plots > batch_size
-        if num_plots > batch_size:
-            num_plots = batch_size
-            print('Number of plots for callback currently set <= batch_size until bug fix.')
-            
-        val_data = DataLoader(data_module.val_set, num_plots)
-        # loading a first batch as default
+        num_plots = plot_configs['num_plots'] if 'num_plots' in plot_configs else config['batch_size']
+        
+        # custom dataloader with num_plots as batch_size
+        val_data = DataLoader(data_module.val_queue, num_plots)
         batch = next(iter(val_data))
         self.X, self.y = model.prepare_batch(batch)
         self.color_channels = config['color_channels_in']
