@@ -1,47 +1,31 @@
 from pytorch_lightning.callbacks import Callback
+from torch.utils.data import DataLoader
 import wandb
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-import torchio as tio
 
 
 class Image2ImageLogger(Callback):
     def __init__(self, model, data_module, config=None):
         super().__init__()
-        val_data = data_module.val_dataloader()
+        
+        plot_configs = config['plotting_callback']
+        num_plots = plot_configs['num_plots'] if 'num_plots' in plot_configs else config['batch_size']
+        
+        # custom dataloader with num_plots as batch_size
+        val_data = DataLoader(data_module.val_queue, num_plots)
         batch = next(iter(val_data))
-        self.color_channels = config['color_channels_in']
         self.X, self.y = model.prepare_batch(batch)
+        self.color_channels = config['color_channels_in']
 
         # plotting properties from config
-        plot_configs = config['plotting_callback']
         self.viewing_axis = plot_configs['viewing_axis']
-        self.fixed_slice = plot_configs['fixed_slice'] \
-            if hasattr(plot_configs, 'fixed_slice') else None
+        self.fixed_slice = plot_configs['fixed_slice'] if 'fixed_slices' in plot_configs else None
+        self.cmap = plot_configs['cmap'] if 'cmap' in plot_configs else 'gray'
         self.vmin = plot_configs['vmin']
         self.vmax = plot_configs['vmax']
         self.titles = ['Input', 'Target', 'Prediction']
-
-    """
-    def prepare_batch(self, batch):
-        # necessary distinction for use of TORCHIO
-        if isinstance(batch, dict):
-            # first input channel
-            x = batch['input0'][tio.DATA]
-            # other input channels if any
-            for i in range(1, self.color_channels):
-                x_i = batch[f'input{i}'][tio.DATA]
-                # axis=0 is batch_size, axis=1 is color_channel
-                x = torch.cat((x, x_i), axis=1)
-            # target channel
-            y = batch['target0'][tio.DATA]
-            return x, y
-
-        # normal use case
-        else:
-            return batch
-    """
 
     def plot_inline(self, d1, d2, d3, color_channel_axis=0):
         """
@@ -87,7 +71,7 @@ class Image2ImageLogger(Callback):
                 single_slice = single_data
             text_pos = single_slice.shape[0] * 0.98
             ax[idx].imshow(
-                single_slice, cmap='gray', vmin=self.vmin, vmax=self.vmax)
+                single_slice, cmap=self.cmap, vmin=self.vmin, vmax=self.vmax)
             ax[idx].axis('off')
             ax[idx].text(3, text_pos, self.titles[idx],
                          color='white', fontsize=12)

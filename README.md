@@ -31,7 +31,7 @@ Project directory
 ## BASIC USAGE
 
 ```
-torch_training -i ~/example_project -c ~/example_project/my_config.yaml
+torch_training -c ~/example_project/my_config.yaml
 ```
 After training, the model is saved in ~/example_project/trained_models along with a copy of the config file.
 
