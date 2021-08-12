@@ -59,5 +59,9 @@ plotting_callback:
   vmax: null
   fixed_slice: null # Defaults to center of viewing_axis
 
+# for early stopping during training
+#early_stopping_callback:
+#  monitor: val_loss
+#  patience: 20
 
 # model-specific info (self-generated) - do not write anything beyond here

@@ -4,6 +4,8 @@ import torch
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.callbacks.early_stopping import EarlyStopping
+
 import os
 import sys
 from pathlib import Path
@@ -134,6 +136,14 @@ def main():
         every_n_val_epochs=2,
     )
     callbacks.append(checkpoint_callback)
+
+    # Early stopping
+    if 'early_stopping_callback' in configs:
+        early_stopping_config = configs['early_stopping_callback']
+        early_stop_callback = EarlyStopping(
+            monitor=early_stopping_config['monitor'],
+            patience=early_stopping_config['patience'])
+        callbacks.append(early_stop_callback)
 
     # Save the config prior to training the model - one for each time the script is started
     if not is_test:
