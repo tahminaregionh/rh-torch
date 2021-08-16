@@ -14,7 +14,15 @@ class Image2ImageLogger(Callback):
         num_plots = plot_configs['num_plots'] if 'num_plots' in plot_configs else config['batch_size']
         
         # custom dataloader with num_plots as batch_size
-        val_data = DataLoader(data_module.val_queue, num_plots)
+        if hasattr(data_module, 'val_queue') and data_module.val_queue:
+            # for GenericTIODataModule users
+            val_data = DataLoader(data_module.val_queue, num_plots)
+        elif hasattr(data_module, 'vat_test') and data_module.vat_test:
+            # for custom Datamodules
+            val_data = DataLoader(data_module.val_set, data_module.batch_size, num_workers=data_module.num_workers)
+        else:
+            raise NotImplementedError(f"The datamodule instantiated from {data_module.__class__} is missing 'val_set' attribute, which should be defined in setup(). See GenericTIODataModule for example.")
+        
         batch = next(iter(val_data))
         self.X, self.y = model.prepare_batch(batch)
         self.color_channels = config['color_channels_in']
