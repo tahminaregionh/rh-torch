@@ -17,7 +17,7 @@ class Image2ImageLogger(Callback):
         if hasattr(data_module, 'val_queue') and data_module.val_queue:
             # for GenericTIODataModule users
             val_data = DataLoader(data_module.val_queue, num_plots)
-        elif hasattr(data_module, 'vat_set') and data_module.vat_set:
+        elif hasattr(data_module, 'val_set') and data_module.val_set:
             # for custom Datamodules
             val_data = DataLoader(data_module.val_set, data_module.batch_size, num_workers=data_module.num_workers)
         else:
