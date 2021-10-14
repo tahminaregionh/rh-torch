@@ -6,7 +6,7 @@ Created on Fri May 21 08:58:01 2021
 @author: claes
 """
 
-__version__ = '0.1.2'
+__version__ = '0.1.3'
 
 """
 
@@ -19,4 +19,5 @@ VERSIONING (UPDATED WHEN PR ARE MERGED INTO MASTER BRANCH)
  0.1.0 # Added torchio for data handling (RD 25-06-2021)
  0.1.1 # Bug-fix for fsspec failing to store and load checkpoints (CL 15-07-2021)
  0.1.2 # Added early stopping callback (CL 11-08-2021)
+ 0.1.3 # Added models/autoencoders2d.py for 2d wavelet model (RD 14-10-2021) 
 """
