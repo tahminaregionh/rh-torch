@@ -6,6 +6,7 @@ import torchmetrics as tm
 import math
 from rhtorch.utilities.modules import recursive_find_python_class
 import torchio as tio
+import numpy as np
 
 
 class LightningAE(pl.LightningModule):
@@ -228,3 +229,149 @@ class LightningPix2Pix(LightningAE):
                                        weight_decay=self.g_weight_decay)
 
         return [g_optimizer, d_optimizer]
+
+
+class LightningRegressor(pl.LightningModule):
+    """
+        Module to perform regression on single output values rather
+        than images. Can be used for single-class classification or regression.
+        When is_classifier is set, output is sigmoid-activated for classification
+        When 'dense_layers' is None, only one dense layer is added.
+                            is a list, e.g. [256,1], two dense layers are added.
+    """
+
+    def __init__(self, hparams, in_shape=(1, 256, 256, 256)):
+        super().__init__()
+        try:
+            self.hparams = hparams
+        except AttributeError:
+            self.hparams.update(hparams)
+
+        self.in_shape = in_shape
+        self.in_channels, self.dimx, self.dimy, self.dimz = self.in_shape
+
+        # regressor
+        # Calculate features used for dense connections
+        num_dense_in_features = self.calculate_dense_features(
+            img_size=self.in_shape[1:],
+            filters=self.hparams['filters'],
+            convolutions=self.hparams['convsizes'])
+        if 'dense_layers' not in self.hparams:
+            hparams['dense_layers'] = [(num_dense_in_features, 1)]
+        elif all(isinstance(elem, list) for elem in self.hparams['dense_layers']):
+            # For inference, this argument has already been formatted
+            pass
+        else:
+            assert self.hparams['dense_layers'][-1] == 1, \
+                ("The dense_layers argument must be a list ending with one "
+                 "output feature in this regression module")
+            dense_layers = []
+            dense_features = [num_dense_in_features,
+                              *self.hparams['dense_layers']]
+            for i in range(len(dense_features)-1):
+                dense_layers.append((dense_features[i], dense_features[i+1]))
+            hparams['dense_layers'] = dense_layers  # Update hparams
+
+        self.regressor = recursive_find_python_class(
+            hparams['regressor'])(self.in_channels, **hparams)
+        self.r_optimizer = getattr(torch.optim, hparams['r_optimizer'])
+        self.lr = hparams['r_lr']
+        if hparams['r_loss'] == "BCEWithLogitsLoss":
+            self.r_loss_train = torch.nn.BCEWithLogitsLoss()
+            self.r_loss_val = torch.nn.BCEWithLogitsLoss()
+        else:
+            self.r_loss_train = getattr(tm, hparams['r_loss'])()
+            self.r_loss_val = getattr(tm, hparams['r_loss'])()
+        self.r_params = self.regressor.parameters()
+
+        # Diverge depending on module type: classification vs regression
+        self.is_classifier = 'is_classifier' in self.hparams and \
+                             self.hparams['is_classifier']
+        if self.is_classifier:
+            self.accuracy = tm.Accuracy()
+            self.precision_ = tm.Precision(num_classes=1)
+            self.recall = tm.Recall(num_classes=1)
+            self.f1 = tm.F1(num_classes=1)
+        else:
+            pass  # More metrics could be added here
+
+    def forward(self, image):
+        return self.regressor(image)
+
+    def calculate_dense_features(self, img_size, filters, convolutions):
+        import functools
+        conv_block = lambda s_, c_ : (s_-c_)+1
+        max_pool = lambda s_ : s_//2
+        for IDX, (f, c) in enumerate(zip(filters, convolutions)):
+            img_size = list(map(functools.partial(conv_block, c_=c), img_size))
+            if IDX < len(convolutions)-1:
+                img_size = list(map(max_pool, img_size))
+        count = img_size[0]*img_size[1]*img_size[2]*f
+        return count
+
+    def prepare_batch(self, batch):
+        # necessary distinction for use of TORCHIO
+        if isinstance(batch, dict):
+            # first input channel
+            x = batch['input0'][tio.DATA]
+            # other input channels if any
+            for i in range(1, self.in_channels):
+                x_i = batch[f'input{i}'][tio.DATA]
+                # axis=0 is batch_size, axis=1 is color_channel
+                x = torch.cat((x, x_i), axis=1)
+
+            if isinstance(batch['target0'],np.float64):
+                # inference (unless set as tensor in data_generator)
+                y = torch.tensor([batch['target0']]).unsqueeze(-1).float()
+            else:
+                y = batch['target0'].unsqueeze(-1).float()
+
+            return x, y
+
+        # normal use case
+        else:
+            return batch
+
+    def training_step(self, batch, batch_idx):
+        # training_step defined the train loop. It is independent of forward
+        x, y = self.prepare_batch(batch)
+        y_hat = self.forward(x)
+        # main loss used for optimization
+        loss = self.r_loss_train(y_hat, y)
+        self.log('train_loss', loss)
+
+        # Other metrics
+        if self.is_classifier:
+            y_pred = torch.sigmoid(y_hat)
+            y_int = y.int()
+            self.log('train_accuracy', self.accuracy(y_pred, y_int))
+            self.log('train_precision_', self.precision_(y_pred, y_int))
+            self.log('train_recall', self.recall(y_pred, y_int))
+            self.log('train_f1', self.f1(y_pred, y_int))
+        else:
+            pass
+
+        return loss
+
+    def validation_step(self, val_batch, batch_idx):
+        x, y = self.prepare_batch(val_batch)
+        y_hat = self.forward(x)
+        loss = self.r_loss_val(y_hat, y)
+        self.log('val_loss', loss)
+
+        # Other metrics
+        if self.is_classifier:
+            y_pred = torch.sigmoid(y_hat)
+            y_int = y.int()
+            self.log('val_accuracy', self.accuracy(y_pred, y_int))
+            self.log('val_precision_', self.precision_(y_pred, y_int))
+            self.log('val_recall', self.recall(y_pred, y_int))
+            self.log('val_f1', self.f1(y_pred, y_int))
+        else:
+            pass
+
+        return loss
+
+    def configure_optimizers(self):
+        r_optimizer = self.r_optimizer(self.r_params, lr=self.lr)
+        return r_optimizer
