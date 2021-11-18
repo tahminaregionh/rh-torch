@@ -314,17 +314,15 @@ class LightningRegressor(pl.LightningModule):
         if isinstance(batch, dict):
             # first input channel
             x = batch['input0'][tio.DATA]
+
             # other input channels if any
             for i in range(1, self.in_channels):
                 x_i = batch[f'input{i}'][tio.DATA]
-                # axis=0 is batch_size, axis=1 is color_channel
-                x = torch.cat((x, x_i), axis=1)
+                color_channel_axis = 0 if x.ndim==4 else 1 # except 2D..
+                x = torch.cat((x, x_i), axis=color_channel_axis)
 
-            if isinstance(batch['target0'],np.float64):
-                # inference (unless set as tensor in data_generator)
-                y = torch.tensor([batch['target0']]).unsqueeze(-1).float()
-            else:
-                y = batch['target0'].unsqueeze(-1).float()
+            y = batch['target0'] if torch.is_tensor(batch['target0']) else torch.tensor([batch['target0']])
+            y = y.unsqueeze(-1).float()
 
             return x, y
 
@@ -374,4 +372,31 @@ class LightningRegressor(pl.LightningModule):
 
     def configure_optimizers(self):
         r_optimizer = self.r_optimizer(self.r_params, lr=self.lr)
-        return r_optimizer
+
+        if 'lr_scheduler' not in self.hparams:
+            return r_optimizer
+        else:
+            print("LR_SCHEDULER:", self.hparams['lr_scheduler'])
+            if self.hparams['lr_scheduler'] == 'polynomial_0.995':
+                def lambda1(epoch): return 0.995 ** epoch
+                scheduler = torch.optim.lr_scheduler.LambdaLR(
+                    r_optimizer, lr_lambda=lambda1)
+            elif self.hparams['lr_scheduler'] == 'step_decay_0.8_25':
+                drop = 0.8
+                epochs_drop = 25.0
+                def lambda1(epoch): return math.pow(
+                    drop, math.floor((1+epoch)/epochs_drop))
+                scheduler = torch.optim.lr_scheduler.LambdaLR(
+                    r_optimizer, lr_lambda=lambda1)
+            elif self.hparams['lr_scheduler'] == 'exponential_decay_0.01':
+                def lambda1(epoch): return math.exp(-0.01*epoch)
+                scheduler = torch.optim.lr_scheduler.LambdaLR(
+                    r_optimizer, lr_lambda=lambda1)
+            else:
+                print("MISSING SCHEDULER")
+                exit(-1)
+            lr_scheduler = {
+                'scheduler': scheduler,
+                'name': self.hparams['lr_scheduler']
+            }
+            return [r_optimizer], [lr_scheduler]

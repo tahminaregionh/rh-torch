@@ -15,7 +15,7 @@ class RegressConvNet(nn.Module):
     Number of blocks (conv and dense) can be scaled dynamically.
 
     Currently, this network can only be used to predict a single scalar value.
-    The network can be used for regression and single-class classification. 
+    The network can be used for regression and single-class classification.
     """
 
     def __init__(self, in_channels=1, convsizes=[7,7,5,3],
