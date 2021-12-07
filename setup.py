@@ -24,6 +24,7 @@ setup(
          'torch',
          'pytorch_lightning',
          'torchio',
+         'scikit-learn',
          'wandb',
          'ruamel.yaml',
          'PyWavelets'
