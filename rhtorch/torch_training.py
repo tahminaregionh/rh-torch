@@ -55,7 +55,6 @@ def main():
         user_configs.create_model_name()  # Update name using newly set epoch
         os.environ['WANDB_MODE'] = 'dryrun'
     configs = user_configs.hparams
-    user_configs.pprint()
 
     # Set local data_generator
     sys.path.insert(1, str(project_dir))
@@ -74,9 +73,9 @@ def main():
     # Should also be changed to custom arguments (**configs)
     shape_in = configs['data_shape_in']   # color_channel, dim1, dim2, dim3
     model = module(configs, shape_in)
-
+    
     # transfer learning setup
-    if 'pretrained generator' in configs and configs['pretrained_generator']:
+    if 'pretrained_generator' in configs and configs['pretrained_generator']:
         tl_message = "Setting up transfer learning"
         pretrained_model_path = Path(configs['pretrained_generator'])
         if pretrained_model_path.exists():
@@ -146,9 +145,11 @@ def main():
         callbacks.append(early_stop_callback)
 
     # Save the config prior to training the model - one for each time the script is started
-    if not is_test:
-        user_configs.save_copy(model_path, append_timestamp=True)
-        print("Saved config prior to model training")
+    if model.local_rank == 0:
+        if not is_test:
+            user_configs.save_copy(model_path, append_timestamp=True)
+            print("Saved config prior to model training")
+        user_configs.pprint()
 
     # set the trainer and fit
     accelerator = 'ddp' if configs['GPUs'] > 1 else None
@@ -167,7 +168,6 @@ def main():
     trainer.fit(model, datamodule=data_module)
 
     # add useful info to saved configs
-    # user_configs.hparams['model_dir'] = str(model_path)
     user_configs.hparams['best_model'] = checkpoint_callback.best_model_path
 
     # save the model
