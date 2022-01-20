@@ -94,10 +94,10 @@ class UserConfig:
         self.hparams['GPUs'] = torch.cuda.device_count()
         self.hparams['global_batch_size'] = self.hparams['batch_size'] * \
             self.hparams['GPUs']
-        self.hparams['rhtorch_version'] = __version__
-        self.hparams['pytorch_version'] = torch.__version__
-        self.hparams['torchio_version'] = tio.__version__
-        self.hparams['pytorch_lightning_version'] = pl.__version__
+        self.hparams['rhtorch_version'] = str(__version__)
+        self.hparams['pytorch_version'] = str(torch.__version__)
+        self.hparams['torchio_version'] = str(tio.__version__)
+        self.hparams['pytorch_lightning_version'] = str(pl.__version__)
 
     def create_model_name(self):
         patch_size = 'x'.join(map(str, self.hparams['patch_size']))
