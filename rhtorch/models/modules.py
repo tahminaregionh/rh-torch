@@ -6,7 +6,100 @@ import torchmetrics as tm
 import math
 from rhtorch.utilities.modules import recursive_find_python_class
 import torchio as tio
-import numpy as np
+import monai
+
+
+class BaseModule(pl.LightningModule):
+    """
+    Generic Base module to start from, setting the default functionality.
+    Note: Network is set in self.net (compared to generator etc in other modules)
+    """
+    def __init__(self, hparams, in_shape=None):
+        super().__init__()
+        try:
+            self.hparams = hparams
+        except AttributeError:
+            self.hparams.update(hparams)
+        # (self.img_rows, self.img_cols, self.channels_input)
+        self.in_shape = in_shape
+        self.in_channels, self.dimx, self.dimy, self.dimz = self.in_shape
+
+        self.setup_model()
+
+    def setup_model(self):
+        self.net = recursive_find_python_class(self.hparams['net'])(
+            self.in_channels, **self.hparams)
+        self.optimizer = getattr(torch.optim, self.hparams['optimizer'])
+        self.lr = self.hparams['lr']
+        self.loss_train = getattr(tm, self.hparams['loss'])()
+        self.loss_val = getattr(tm, self.hparams['loss'])()
+        self.params = self.net.parameters()
+
+    def forward(self, image):
+        return self.net(image)
+
+    def prepare_batch(self, batch):
+        # necessary distinction for use of TORCHIO
+        if isinstance(batch, dict):
+            # first input channel
+            x = batch['input0'][tio.DATA]
+            # other input channels if any
+            for i in range(1, self.in_channels):
+                x_i = batch[f'input{i}'][tio.DATA]
+                # axis=0 is batch_size, axis=1 is color_channel
+                x = torch.cat((x, x_i), axis=1)
+            # target channel
+            y = batch['target0'][tio.DATA]
+            return x, y
+
+        # normal use case
+        else:
+            return batch
+
+    def training_step(self, batch, batch_idx):
+        x, y = self.prepare_batch(batch)
+        y_hat = self.forward(x)
+        loss = self.loss_train(y_hat, y)
+        self.log('train_loss', loss)
+        return loss
+
+    def validation_step(self, val_batch, batch_idx):
+        x, y = self.prepare_batch(val_batch)
+        y_hat = self.forward(x)
+        loss = self.loss_val(y_hat, y)
+        self.log('val_loss', loss)
+        return loss
+
+    def configure_optimizers(self):
+        optimizer = self.optimizer(self.params, lr=self.lr)
+
+        if 'lr_scheduler' not in self.hparams:
+            return optimizer
+        else:
+            print("LR_SCHEDULER:", self.hparams['lr_scheduler'])
+            if self.hparams['lr_scheduler'] == 'polynomial_0.995':
+                def lambda1(epoch): return 0.995 ** epoch
+                scheduler = torch.optim.lr_scheduler.LambdaLR(
+                    optimizer, lr_lambda=lambda1)
+            elif self.hparams['lr_scheduler'] == 'step_decay_0.8_25':
+                drop = 0.8
+                epochs_drop = 25.0
+                def lambda1(epoch): return math.pow(
+                    drop, math.floor((1+epoch)/epochs_drop))
+                scheduler = torch.optim.lr_scheduler.LambdaLR(
+                    optimizer, lr_lambda=lambda1)
+            elif self.hparams['lr_scheduler'] == 'exponential_decay_0.01':
+                def lambda1(epoch): return math.exp(-0.01*epoch)
+                scheduler = torch.optim.lr_scheduler.LambdaLR(
+                    optimizer, lr_lambda=lambda1)
+            else:
+                print("MISSING SCHEDULER")
+                exit(-1)
+            lr_scheduler = {
+                'scheduler': scheduler,
+                'name': self.hparams['lr_scheduler']
+            }
+            return [optimizer], [lr_scheduler]
 
 
 class LightningAE(pl.LightningModule):
@@ -402,3 +495,39 @@ class LightningRegressor(pl.LightningModule):
                 'name': self.hparams['lr_scheduler']
             }
             return [r_optimizer], [lr_scheduler]
+
+
+class MONAI(BaseModule):
+    """
+    Uses MONAI to define the network.
+    Following shows use case for a DenseNet121. Config file must have, e.g.:
+    >>>
+    module: MONAI
+    monai_params:
+      net: DenseNet121
+      args:
+        spatial_dims: 3
+        in_channels: 4
+        out_channels: 1
+    >>>
+    where arguments under "args" is specific to the MONAI network.
+    See monai documentation.
+    """
+    def __init__(self, hparams, in_shape=(1, 256, 256, 256)):
+        super().__init__(hparams, in_shape)
+
+    def setup_model(self):
+
+        # Add MONAI network
+        monai_params = self.hparams['monai_params']
+        assert hasattr(monai.networks.nets, monai_params['net']),\
+            "MONAI does not have network {}.".format(monai_params['net'])
+        net = getattr(monai.networks.nets, monai_params['net'])
+        self.net = net(**monai_params['args'])
+
+        # Continue default for optimizer and loss
+        self.optimizer = getattr(torch.optim, self.hparams['optimizer'])
+        self.lr = self.hparams['lr']
+        self.loss_train = getattr(tm, self.hparams['loss'])()
+        self.loss_val = getattr(tm, self.hparams['loss'])()
+        self.params = self.net.parameters()
