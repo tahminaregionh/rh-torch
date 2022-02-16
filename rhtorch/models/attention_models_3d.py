@@ -378,3 +378,67 @@ class AttentionUNet(nn.Module):
             raise ValueError(
                 "Network output contains nan values. Something's wrong.")
         return out_img
+
+
+class FAN3D(nn.Module):
+    """ 
+        Frequency attention Network in 3D with Fourier Transform.
+        Same as FAN2D (but for 3D!) in attention_models_2d.py
+        
+        Implementation of UNET using attention blocks with 3D input 
+        can be PET only, or PET+CT or PET+MR
+        Activation functions throughout are PReLU and no BN, no dropout.
+        This is a re-work of https://github.com/momo1689/FAN
+        where I changed wavelet transform to Fourier transform.
+        
+        WARNING: I have had mixed results with this network.
+                 Mostly I get exploding gradients because of no BN.
+                 So need careful choice of learning rate scheduler.
+                
+    """
+
+    def __init__(self,
+                 in_channels,
+                 depth_S=5,
+                 depth_U=4,
+                 feature_dims=64,
+                 **kwargs):
+        super().__init__()
+        self.sigma_net = SigmaNet(in_channels=1,
+                                  out_channels=1,
+                                  depth=depth_S,
+                                  num_filter=feature_dims)
+        self.UNet = UNet(in_channels=in_channels + 3,
+                         out_channels=2,
+                         depth=depth_U,
+                         feature_dims=feature_dims)
+
+    def forward(self, img):
+        # get noise map from SigmaNet. Only pass PET image
+        if self.in_channels == 1:
+            noise_map = self.sigma_net(img)
+        else:
+            noise_map = self.sigma_net(img[:, :1, ...])
+
+        # Fourier decomposition on gray scale image. Split REAL and IMAG part
+        fourier_decomp = fftn(img)
+        f_real = fourier_decomp.real
+        f_imag = fourier_decomp.imag
+
+        # concat (Fourier decomposition + image + noise_map) as input to UNET
+        # (bs, 4, dim1, dim2)
+        net_input = torch.cat((f_real, f_imag, img, noise_map), dim=1)
+
+        # run through the UNet
+        net_out = self.UNet(net_input)
+        # extract REAL and IMAG part
+        out_fftr = net_out[:, 0].unsqueeze(dim=1)
+        out_ffti = net_out[:, 1].unsqueeze(dim=1)
+
+        # compute the inverse FFT to generate output image
+        out_img = torch.abs(ifftn(out_fftr + 1j * out_ffti))
+
+        if torch.any(torch.isnan(out_img)):
+            raise ValueError(
+                "Network output contains nan values. Something's wrong.")
+        return out_img
