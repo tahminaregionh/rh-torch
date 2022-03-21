@@ -351,13 +351,13 @@ class LightningRegressor(pl.LightningModule):
             convolutions=self.hparams['convsizes'])
         if 'dense_layers' not in self.hparams:
             hparams['dense_layers'] = [(num_dense_in_features, 1)]
-        elif all(isinstance(elem, list) for elem in self.hparams['dense_layers']):
+        elif all(isinstance(elem, (list, tuple)) for elem in self.hparams['dense_layers']):
             # For inference, this argument has already been formatted
             pass
         else:
             assert self.hparams['dense_layers'][-1] == 1, \
                 ("The dense_layers argument must be a list ending with one "
-                 "output feature in this regression module")
+                 "output feature in this regression module, is:", self.hparams['dense_layers'])
             dense_layers = []
             dense_features = [num_dense_in_features,
                               *self.hparams['dense_layers']]
