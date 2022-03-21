@@ -1,3 +1,4 @@
+import yaml as yaml_default
 import ruamel.yaml as yaml
 from datetime import datetime
 from pathlib import Path
@@ -18,6 +19,11 @@ class UserConfig:
         # load user config file
         with open(self.config_file) as cf:
             self.hparams = yaml.load(cf, Loader=yaml.RoundTripLoader)
+
+        # Fix when saved with default yaml instead
+        if all([k in list(self.hparams.keys()) for k in ['state','dictitems']]):
+            with open(self.config_file) as cf:
+                self.hparams = yaml_default.load(cf, Loader=yaml_default.Loader)
 
         # for inference, only load the config file
         if mode == 'train':
@@ -112,7 +118,11 @@ class UserConfig:
         config_file = output_dir.joinpath(save_config_file_name + ".yaml")
         self.hparams.yaml_set_start_comment(f'Config file for {model_name}')
         with open(config_file, 'w') as file:
-            yaml.dump(self.hparams, file, Dumper=yaml.RoundTripDumper)
+            try:
+                yaml.dump(self.hparams, file, Dumper=yaml.RoundTripDumper)
+            except yaml.representer.RepresenterError:
+                yaml_default.dump(self.hparams, file, default_flow_style=False)
+
 
     def pprint(self):
         print("\n####################### USER CONFIGS #######################")
