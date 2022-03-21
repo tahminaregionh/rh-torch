@@ -196,6 +196,8 @@ class LightningAE(pl.LightningModule):
                 def lambda1(epoch): return math.exp(-0.01*epoch)
                 scheduler = torch.optim.lr_scheduler.LambdaLR(
                     g_optimizer, lr_lambda=lambda1)
+            elif self.hparams['lr_scheduler'] == 'step_decay_0.9_10':
+                scheduler = torch.optim.lr_scheduler.StepLR(g_optimizer, 10, gamma=0.9)
             else:
                 print("MISSING SCHEDULER")
                 exit(-1)
