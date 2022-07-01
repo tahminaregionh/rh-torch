@@ -41,7 +41,7 @@ class GenericTIODataModule(pl.LightningDataModule):
         self.datadir = Path(self.config['data_folder'])
         self.augment = self.config['augment']
         self.num_workers = min(8, multiprocessing.cpu_count()) \
-            if not socket.gethostname().startswith('ibm') \
+            if not socket.gethostname().startswith('ibm') and not socket.gethostname().startswith('ross') \
             else 16  # Could do 32 (has 132) but might run out..
 
         # for the queue
@@ -78,7 +78,7 @@ class GenericTIODataModule(pl.LightningDataModule):
                 glob.glob(f"{self.datadir}/*_train_test_split_*_fold.json")[0]
         if not pkl_file.exists():
             raise FileNotFoundError(
-                "Data train/test split info file not found. "
+                f"Data train/test split info file not found. {pkl_file} "
                 "Add file to data folder or declare in config file.")
 
         # use json or pickle loader depending on file extension

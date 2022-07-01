@@ -132,7 +132,7 @@ def main():
         filename='Checkpoint_min_val_loss-{epoch:03d}',
         save_top_k=3,       # saves 3 best models based on monitored value
         save_last=True,     # additionally overwrites a file last.ckpt after each epoch
-        every_n_val_epochs=2,
+        every_n_epochs=2,
     )
     callbacks.append(checkpoint_callback)
 
@@ -152,12 +152,12 @@ def main():
         user_configs.pprint()
 
     # set the trainer and fit
-    accelerator = 'ddp' if configs['GPUs'] > 1 else None
+    strategy = 'ddp' if configs['GPUs'] > 1 else None
     trainer = pl.Trainer(max_epochs=configs['epoch'],
                          logger=wandb_logger,
                          callbacks=callbacks,
                          gpus=-1,
-                         accelerator=accelerator,
+                         strategy=strategy,
                          resume_from_checkpoint=existing_checkpoint,
                          auto_select_gpus=True,
                          accumulate_grad_batches=configs['acc_grad_batches'],

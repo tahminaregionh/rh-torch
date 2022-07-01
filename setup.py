@@ -22,13 +22,14 @@ setuptools.setup(
      packages=setuptools.find_packages(),
      install_requires=[
          'torch',
-         'pytorch_lightning',
+         'pytorch_lightning>=1.5',
          'torchio',
          'scikit-learn',
          'wandb',
          'ruamel.yaml',
          'PyWavelets',
-         'monai'
+         'monai',
+         'matplotlib'
     ],
     classifiers=[
         'Programming Language :: Python :: 3.8',
