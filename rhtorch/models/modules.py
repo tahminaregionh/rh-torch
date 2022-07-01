@@ -31,8 +31,15 @@ class BaseModule(pl.LightningModule):
             self.in_channels, **self.hparams)
         self.optimizer = getattr(torch.optim, self.hparams['optimizer'])
         self.lr = self.hparams['lr']
-        self.loss_train = getattr(tm, self.hparams['loss'])()
-        self.loss_val = getattr(tm, self.hparams['loss'])()
+        if self.hparams['loss'] == "BCEWithLogitsLoss":
+            self.loss_train = torch.nn.BCEWithLogitsLoss()
+            self.loss_val = torch.nn.BCEWithLogitsLoss()
+        elif self.hparams['loss'] == "BCE":
+            self.loss_train = torch.nn.BCELoss()
+            self.loss_val = torch.nn.BCELoss()
+        else:
+            self.loss_train = getattr(tm, self.hparams['loss'])()
+            self.loss_val = getattr(tm, self.hparams['loss'])()
         self.params = self.net.parameters()
 
     def forward(self, image):
@@ -528,6 +535,98 @@ class MONAI(BaseModule):
         # Continue default for optimizer and loss
         self.optimizer = getattr(torch.optim, self.hparams['optimizer'])
         self.lr = self.hparams['lr']
-        self.loss_train = getattr(tm, self.hparams['loss'])()
-        self.loss_val = getattr(tm, self.hparams['loss'])()
+        if self.hparams['loss'] == "BCEWithLogitsLoss":
+            self.loss_train = torch.nn.BCEWithLogitsLoss()
+            self.loss_val = torch.nn.BCEWithLogitsLoss()
+        elif self.hparams['loss'] == "BCE":
+            self.loss_train = torch.nn.BCELoss()
+            self.loss_val = torch.nn.BCELoss()
+        elif self.hparams['loss'] == "FocalLoss":
+            self.loss_train = monai.losses.FocalLoss(to_onehot_y=True)
+            self.loss_val = monai.losses.FocalLoss(to_onehot_y=True)
+        else:
+            self.loss_train = getattr(tm, self.hparams['loss'])()
+            self.loss_val = getattr(tm, self.hparams['loss'])()
         self.params = self.net.parameters()
+
+class MONAIClassifier(MONAI):
+    """
+    Uses MONAI to define the network.
+    Following shows use case for a DenseNet121. Config file must have, e.g.:
+    >>>
+    module: MONAI
+    monai_params:
+      net: DenseNet121
+      args:
+        spatial_dims: 3
+        in_channels: 4
+        out_channels: 1
+    >>>
+    where arguments under "args" is specific to the MONAI network.
+    See monai documentation.
+    """
+    def __init__(self, hparams, in_shape=(1, 256, 256, 256)):
+        super().__init__(hparams, in_shape)
+
+        # Diverge depending on module type: classification vs regression
+        self.is_classifier = 'is_classifier' in self.hparams and \
+                             self.hparams['is_classifier']
+        if self.is_classifier:
+            self.accuracy = tm.Accuracy()
+            self.precision_ = tm.Precision(num_classes=1)
+            self.recall = tm.Recall(num_classes=1)
+            self.f1 = tm.F1(num_classes=1)
+        else:
+            pass  # More metrics could be added here
+
+    def prepare_batch(self, batch):
+        if isinstance(batch, dict):
+            x = batch['input0'][tio.DATA]
+            for i in range(1, self.in_channels):
+                x_i = batch[f'input{i}'][tio.DATA]
+                x = torch.cat((x, x_i), axis=1)
+            y = batch['target0'] if torch.is_tensor(batch['target0']) else torch.tensor([batch['target0']])
+            y = y.unsqueeze(-1).float()
+            return x, y
+        else:
+            return batch
+
+    def training_step(self, batch, batch_idx):
+        x, y = self.prepare_batch(batch)
+        y_hat = self.forward(x)
+        loss = self.loss_train(y_hat, y)
+        self.log('train_loss', loss)
+
+        # Other metrics
+        if self.is_classifier:
+            y_pred = torch.sigmoid(y_hat)
+            y_int = y.int()
+            self.log('train_accuracy', self.accuracy(y_pred, y_int))
+            self.log('train_precision', self.precision_(y_pred, y_int))
+            self.log('train_recall', self.recall(y_pred, y_int))
+            self.log('train_f1', self.f1(y_pred, y_int))
+        else:
+            pass
+
+        return loss
+
+    def validation_step(self, val_batch, batch_idx):
+        x, y = self.prepare_batch(val_batch)
+        y_hat = self.forward(x)
+        loss = self.loss_val(y_hat, y)
+        self.log('val_loss', loss)
+
+        # Other metrics
+        if self.is_classifier:
+            y_pred = torch.sigmoid(y_hat)
+            y_int = y.int()
+            self.log('val_accuracy', self.accuracy(y_pred, y_int))
+            self.log('val_precision', self.precision_(y_pred, y_int))
+            self.log('val_recall', self.recall(y_pred, y_int))
+            self.log('val_f1', self.f1(y_pred, y_int))
+        else:
+            pass
+
+        return loss
+
+    
