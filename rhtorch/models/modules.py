@@ -258,7 +258,7 @@ class LightningPix2Pix(LightningAE):
 
         # discriminator
         self.discriminator = recursive_find_python_class(
-            hparams['discriminator'])(self.in_channels)
+            hparams['discriminator'])(self.in_channels, **hparams)
         self.d_optimizer = getattr(torch.optim, self.hparams['d_optimizer'])
         self.d_lr = self.hparams['d_lr']
         self.d_weight_decay = self.hparams['d_weight_decay'] if 'd_weight_decay' in self.hparams else 0
@@ -575,7 +575,7 @@ class MONAIClassifier(MONAI):
             self.accuracy = tm.Accuracy()
             self.precision_ = tm.Precision(num_classes=1)
             self.recall = tm.Recall(num_classes=1)
-            self.f1 = tm.F1(num_classes=1)
+            self.f1 = tm.F1Score(num_classes=1)
         else:
             pass  # More metrics could be added here
 

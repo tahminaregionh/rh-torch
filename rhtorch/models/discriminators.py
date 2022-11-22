@@ -6,7 +6,7 @@ import torch.nn as nn
 
 
 class ConvNetDiscriminator(nn.Module):
-    def __init__(self, in_channels=2, dis_f=64):
+    def __init__(self, in_channels=2, dis_f=64, **kwargs):
         super().__init__()
         """ Defines a PatchGAN discriminator
         
@@ -19,8 +19,18 @@ class ConvNetDiscriminator(nn.Module):
             Number of filters in the first conv layer. Default is 64.
 
         """
-        # In channels must be at least 2
-        disc_in_channels = 2 if in_channels < 2 else in_channels
+        # Determine the number of channels used for the discriminator.
+        if in_channels < 2:
+            # In channels must be at least 2 (input (conditioned image) and target (fake or real))
+            disc_in_channels = 2
+            self.d_input_index = [0]
+        elif 'd_input_index' in kwargs:
+            disc_in_channels = len(kwargs['d_input_index'])+1
+            self.d_input_index = kwargs['d_input_index']
+        else:
+            # Default is to pick the first color channel only
+            disc_in_channels = 2
+            self.d_input_index = [0]
         
         # weight initialization - may experiment with kaiming
         # init = normal_(stddev=0.02)	
@@ -54,9 +64,15 @@ class ConvNetDiscriminator(nn.Module):
             shape = (bs, cc, dim1, dim2, dim3)"""
         bs, cc, d1, d2, d3 = list(tar.size())
 
-        # only pass first color channel (PET data) in case there's more (e.g CT)
-        inp = inp[:, 0, ...].view(bs, 1, d1, d2, d3)
-        x = torch.cat([inp, tar], dim=1)
+        # Select the first selected color channel (0 if nothing else is selected)
+        selected_inp = inp[:, self.d_input_index[0], ...].view(bs, 1, d1, d2, d3)
+        # Add other color channels if applicable
+        if len(self.d_input_index) > 1:
+            for i in range(1, len(self.d_input_index)):
+                _selected_inp = inp[:, self.d_input_index[i], ...].view(bs, 1, d1, d2, d3)
+                selected_inp = torch.cat([selected_inp, _selected_inp], dim=1)        
+
+        x = torch.cat([selected_inp, tar], dim=1)
         x = self.c1(x)
         x = self.c2(x)
         x = self.c3(x)
