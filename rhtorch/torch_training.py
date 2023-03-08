@@ -12,6 +12,7 @@ from pathlib import Path
 import argparse
 
 # library package imports
+import rhtorch
 from rhtorch.callbacks import plotting
 from rhtorch.utilities.config import UserConfig
 from rhtorch.utilities.modules import recursive_find_python_class
@@ -111,7 +112,7 @@ def main():
     callbacks = []
     if 'plotting_callback' in configs:
         plot_configs = configs['plotting_callback']
-        plotting_callback = getattr(plotting, plot_configs['class'])
+        plotting_callback = recursive_find_python_class(plot_configs['class'], current_module='rhtorch.callbacks')
         callbacks.append(plotting_callback(model, data_module, configs))
 
     # checkpointing
