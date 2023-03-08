@@ -14,9 +14,9 @@ import socket
 import json
 import glob
 import pytorch_lightning as pl
-from torchio import ScalarImage, Subject, SubjectsDataset, Queue
+from torchio import ScalarImage, Subject, SubjectsDataset, Queue, LabelMap
 from torchio.transforms import Lambda, RandomAffine, RandomFlip, Compose
-from torchio.data import UniformSampler
+from torchio.data import UniformSampler, LabelSampler
 
 """
 Generic torchio data generator.
@@ -222,6 +222,43 @@ class GenericTIODataModule(pl.LightningDataModule):
 
     def val_dataloader(self):
         return DataLoader(self.val_queue, self.batch_size)
+
+
+"""
+Generic TIO Data Module with label sampling from sampling map
+"""
+class GenericLabelSamplerTIODataModule(GenericTIODataModule):
+    def __init__(self, config, quick_test=False):
+        super().__init__(config, quick_test)
+
+        probabilities = None if 'label_sampler_probability' not in config['label_map'] else config['label_map']['label_sampler_probabilities'] 
+        self.sampler = LabelSampler(
+            patch_size=self.patch_size,
+            label_name='sampling_map',
+            label_probabilities=probabilities,
+        )
+
+    # Overwrites default function
+    def prepare_patient_data(self, mode='train'):
+        patients = self.load_data_splitting(mode)
+        subjects = []
+        for p in patients:
+            p_folder = self.datadir.joinpath(p)
+            patient_dict = {'id': p, 'sampling_map': LabelMap(p_folder.joinpath(self.config['label_map']['name']))}
+
+            for file_type in ['input', 'target']:
+                file_info = self.config[file_type + '_files']
+                for i in range(len(file_info['name'])):
+                    input_path = p_folder.joinpath(file_info['name'][i])
+                    transf = file_info['preprocess_step'][i]
+                    patient_dict[f"{file_type}{i}"] = \
+                        self.prepare_patient_info(input_path, transf)
+
+            # Subject instantiation
+            s = Subject(patient_dict)
+            subjects.append(s)
+
+        return subjects
 
 
 """
