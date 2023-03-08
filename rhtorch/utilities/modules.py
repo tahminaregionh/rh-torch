@@ -15,11 +15,11 @@ from typing import Union
 
 
 def recursive_find_python_class(name, folder=None,
-                                current_module="rhtorch.models"):
+                                current_module="rhtorch.models", exit_if_not_found=True):
 
     # Set default search path to root modules
     if folder is None:
-        folder = [os.path.join(rhtorch.__path__[0], 'models')]
+        folder = [os.path.join(rhtorch.__path__[0], *current_module.split('.')[1:])]
 
     tr = None
     for importer, modname, ispkg in pkgutil.iter_modules(folder):
@@ -34,12 +34,12 @@ def recursive_find_python_class(name, folder=None,
             if ispkg:
                 next_current_module = current_module + '.' + modname
                 tr = recursive_find_python_class(name, folder=[os.path.join(
-                    folder[0], modname)], current_module=next_current_module)
+                    folder[0], modname)], current_module=next_current_module, exit_if_not_found=exit_if_not_found)
 
             if tr is not None:
                 break
 
-    if tr is None:
+    if tr is None and exit_if_not_found:
         sys.exit(f"Could not find module {name}")
 
     return tr
@@ -82,3 +82,11 @@ def find_best_checkpoint(ckpt_dir: Union[str, Path],
                 best_score = val_loss
                 best_path = ckpt['best_model_path']
         return best_path
+
+
+""" Calculate the overlap for torchio inference
+    If the patch is e.g. 192,192,16 and a patch spacing is 16,16,4 
+    it will return 576 patches that overlaps with the center voxel
+"""
+def calculate_patch_overlap(patch_shape, patch_spacing):
+    return [p_shape - p_space for p_shape, p_space in zip(patch_shape, patch_spacing)]
