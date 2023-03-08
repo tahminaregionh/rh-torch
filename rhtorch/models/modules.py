@@ -7,6 +7,7 @@ import math
 from rhtorch.utilities.modules import recursive_find_python_class
 import torchio as tio
 import monai
+import sys
 
 
 class BaseModule(pl.LightningModule):
@@ -126,12 +127,29 @@ class LightningAE(pl.LightningModule):
         self.g_optimizer = getattr(torch.optim, hparams['g_optimizer'])
         self.lr = hparams['g_lr']
         self.g_weight_decay = hparams['g_weight_decay'] if 'g_weight_decay' in self.hparams else 0
-        self.g_loss_train = getattr(tm, hparams['g_loss'])()  # MAE
-        self.g_loss_val = getattr(tm, hparams['g_loss'])()  # MAE
+        # Loss function. Check first for local, then torch metrics
+        if (loss_module := recursive_find_python_class(hparams['g_loss'], exit_if_not_found=False)) is not None:
+            self.g_loss_train = loss_module()
+            self.g_loss_val = loss_module()
+            self.clear_loss_at_epoch_end = True
+        else:
+            self.g_loss_train = getattr(tm, hparams['g_loss'])()  # MAE
+            self.g_loss_val = getattr(tm, hparams['g_loss'])()  # MAE
+            self.clear_loss_at_epoch_end = False
         self.g_params = self.generator.parameters()
 
         # additional losses
         self.mse_loss = tm.MeanSquaredError()
+        # Add all extra losses, e.g. set as g_additional_losses: ['StructuralSimilarityIndexMeasure', 'Dice'] 
+        if 'g_additional_losses' in hparams:
+            self.additional_losses = {}
+            for additional_losses in hparams['g_additional_losses']:
+                if hasattr(tm, additional_losses):
+                    self.additional_losses[additional_losses] = getattr(tm, additional_losses)()
+                elif hasattr(tm.functional, additional_losses):
+                    self.additional_losses[additional_losses] = getattr(tm.functional, additional_losses)
+                else:
+                    sys.exit(f"Could not find loss function {additional_losses}")
 
     def forward(self, image):
         """ image.size: (Batch size, Color channels, Depth, Height, Width) """
@@ -167,6 +185,8 @@ class LightningAE(pl.LightningModule):
         self.log('train_loss', loss)  # , sync_dist=True)
         # other losses to log only
         self.log('train_mse', self.mse_loss(y_hat, y))  # , sync_dist=True)
+        for add_loss_name, add_loss_fn in self.additional_losses.items():
+            self.log(f'train_{add_loss_name}', add_loss_fn(y_hat, y))
 
         return loss
 
@@ -176,6 +196,8 @@ class LightningAE(pl.LightningModule):
         loss = self.g_loss_val(y_hat, y)
         self.log('val_loss', loss)  # , sync_dist=True)
         self.log('val_mse', self.mse_loss(y_hat, y))  # , sync_dist=True)
+        for add_loss_name, add_loss_fn in self.additional_losses.items():
+            self.log(f'val_{add_loss_name}', add_loss_fn(y_hat, y))
 
         return loss
 
@@ -393,7 +415,7 @@ class LightningRegressor(pl.LightningModule):
             self.accuracy = tm.Accuracy()
             self.precision_ = tm.Precision(num_classes=1)
             self.recall = tm.Recall(num_classes=1)
-            self.f1 = tm.F1(num_classes=1)
+            self.f1 = tm.F1Score(num_classes=1)
         else:
             pass  # More metrics could be added here
 
