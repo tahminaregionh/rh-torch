@@ -153,20 +153,18 @@ def main():
         user_configs.pprint()
 
     # set the trainer and fit
-    strategy = 'ddp' if configs['GPUs'] > 1 else None
+    strategy = 'ddp' if configs['GPUs'] > 1 else 'auto'
     trainer = pl.Trainer(max_epochs=configs['epoch'],
                          logger=wandb_logger,
                          callbacks=callbacks,
-                         gpus=-1,
+                         devices=-1,
                          strategy=strategy,
-                         resume_from_checkpoint=existing_checkpoint,
-                         auto_select_gpus=True,
                          accumulate_grad_batches=configs['acc_grad_batches'],
                          precision=configs['precision'],
                          profiler="simple")
 
-    # actual training
-    trainer.fit(model, datamodule=data_module)
+    # actual training    
+    trainer.fit(model, datamodule=data_module, ckpt_path=existing_checkpoint)
 
     # add useful info to saved configs
     user_configs.hparams['best_model'] = checkpoint_callback.best_model_path
